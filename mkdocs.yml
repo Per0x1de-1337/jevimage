@@ -1,0 +1,23 @@
+# Optional. The pages under docs/ are plain Markdown with relative links between them,
+# so they read correctly on GitHub with no build step; this file only exists for people
+# who want a searchable site. `pip install 'jevimage[docs]'` then `mkdocs serve`.
+# `mkdocs build` warns about the handful of links into jevimage/ and examples/: those
+# are source files, correct on GitHub, and deliberately outside the site.
+site_name: jevimage
+site_description: A probability-first image classifier you can self-host.
+theme:
+  name: readthedocs          # ships with mkdocs itself, no plugin and no paid tier
+nav:
+  - Overview: index.md
+  - Install: install.md
+  - Quickstart: quickstart.md
+  - Question types: questions.md
+  - Training a head: training.md
+  - Choosing an encoder: encoders.md
+  - Serving: serving.md
+  - Reference:
+      - CLI: reference-cli.md
+      - Python: reference-python.md
+      - HTTP: reference-http.md
+  - Cookbook: cookbook.md
+  - Troubleshooting: troubleshooting.md

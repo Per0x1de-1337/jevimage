@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=77"]          # 77 is where `license = "MIT"` became the spelling
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jevimage"
+dynamic = ["version"]
+description = "A probability-first image classifier you can self-host: one encode, many typed questions, calibrated answers."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name = "the jevimage authors"}]
+keywords = ["image-classification", "zero-shot", "clip", "siglip", "embeddings",
+            "calibration", "vision", "self-hosted"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+# The base install is the HTTP client and nothing else: someone who only calls a
+# hosted instance should not download a 2GB deep-learning stack to do it. Running the
+# models yourself is the `local` extra, which is what `jevimage.load()` asks for by
+# name if it is missing.
+dependencies = [
+    "pillow>=9.0",
+]
+
+[project.optional-dependencies]
+# Run the encoder in your own process.
+local = [
+    "torch>=2.0",
+    # The floor is what the REGISTRY needs, not what the default encoder needs. siglip2
+    # loads on 4.45 (its config's model_type is `siglip`), but metaclip2-huge is
+    # model_type `metaclip_2`, which transformers first recognises in 4.56 - so a 4.45
+    # resolution satisfied `jevimage[local]` and still could not load a listed encoder.
+    "transformers>=4.56",
+]
+# Host it for other people. Implies `local`: a server runs the encoder.
+serve = [
+    "jevimage[local]",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+]
+# `load("dfn5b-h-14-384")` downloads Apple's DFN5B weights under Apple's own licence.
+# That is the user's call to make, so open_clip stays an extra and the weights are
+# never a dependency of this package.
+openclip = ["jevimage[local]", "open_clip_torch>=2.24"]
+dev = ["jevimage[serve]", "pytest>=7"]
+# There is no docs extra: the site is built with the Mintlify CLI (`mint export`),
+# which is not a Python package. The pages are plain markdown and read fine on GitHub
+# without any toolchain at all.
+
+[project.scripts]
+jev = "jevimage.cli:main"
+
+# PyPI renders these as the sidebar links on the package page. A URL that 404s is
+# worse than none, so each of these is one that answers.
+
+[project.urls]
+Documentation = "http://13.50.56.146/docs"
+Source = "https://github.com/jevimage/jevimage"
+Issues = "https://github.com/jevimage/jevimage/issues"
+
+[tool.setuptools]
+packages = ["jevimage"]
+
+[tool.setuptools.dynamic]
+version = {attr = "jevimage.__version__"}

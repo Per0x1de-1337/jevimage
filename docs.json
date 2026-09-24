@@ -1,0 +1,53 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "jevimage",
+  "description": "A probability-first image classifier you can self-host.",
+  "colors": {
+    "primary": "#2f7d63",
+    "light": "#50c98b",
+    "dark": "#1d4f40"
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Getting started",
+        "pages": ["docs/index", "docs/install", "docs/quickstart"]
+      },
+      {
+        "group": "Guides",
+        "pages": [
+          "docs/questions",
+          "docs/training",
+          "docs/encoders",
+          "docs/serving"
+        ]
+      },
+      {
+        "group": "Reference",
+        "pages": [
+          "docs/reference-python",
+          "docs/reference-http",
+          "docs/reference-cli"
+        ]
+      },
+      {
+        "group": "Recipes",
+        "pages": ["docs/cookbook", "docs/troubleshooting"]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/jevimage/jevimage"
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/jevimage/jevimage"
+    }
+  }
+}
