@@ -15,7 +15,7 @@ differently. The same image and the same question give the same numbers, to the 
 decimals they are printed to, every time. The second, third and tenth question about one
 image cost a matmul each, not another forward pass, once their captions are in the
 per-process cache. A caption the process has not seen costs a text-tower pass the first
-time; see [the timings](/docs/encoders#timings) for what that is worth. When prompts are
+time; see [the timings](encoders.md#timings) for what that is worth. When prompts are
 not good enough you fit a linear head on your own labelled folder in seconds, and
 jevimage reports per class whether that head beat the prompts. Sometimes it does not,
 and it says so.
@@ -29,13 +29,13 @@ Both are supported paths, not a main one and a fallback. They are the same API.
 | install | `pip install jevimage` | `pip install 'jevimage[local]'` |
 | what that pulls in | pillow and the standard library | torch, transformers, and encoder weights on first use |
 | entry point | `jevimage.connect(url)` | `jevimage.load()` |
-| where the model runs | on that server — yours or someone else's | in your process |
+| where the model runs | on that server - yours or someone else's | in your process |
 | where your images go | up to that server | nowhere |
 
 The base install is an HTTP client. It has no torch, no transformers and no weights,
 and everything works through it: asking, embedding, **and training**, since the
-encoder that fits the head lives on the server. `jev encoders` works offline, and
-`jev ask/train/heads/rm --url ...` (or `$JEV_URL`, with `$JEV_API_KEY`) drive a server
+encoder that fits the head lives on the server. `jevimage encoders` works offline, and
+`jevimage ask/train/heads/rm --url ...` (or `$JEVIMAGE_URL`, with `$JEVIMAGE_API_KEY`) drive a server
 from the command line.
 
 `jevimage.load()` in that install does not fail obscurely; it names both fixes:
@@ -49,7 +49,7 @@ To use a server instead - no torch required - call jevimage.connect(url).
 ```
 
 Going the other way, `pip install 'jevimage[serve]'` adds fastapi and uvicorn so you can
-be the server other people connect to: `jev serve`. See [Serving](/docs/serving).
+be the server other people connect to: `jevimage serve`. See [Serving](serving.md).
 
 ## 60 seconds
 
@@ -93,14 +93,14 @@ on is the encoder, not which side of the wire it runs on.
 > The numbers above came from a deterministic stand-in encoder, so the transcript is
 > reproducible and costs nothing to re-run: `python examples/make_fixtures.py` writes
 > the `ds/` squares it asks about, and the server was the toy one from
-> [Serving](/docs/serving#build_app-your-own-encoder) (a custom encoder has to be served
-> from Python - `jev serve` only knows the built-in registry). The shapes, the repr and
+> [Serving](serving.md#build_app-your-own-encoder) (a custom encoder has to be served
+> from Python - `jevimage serve` only knows the built-in registry). The shapes, the repr and
 > the code are real.
 > How peaked a real distribution is depends on the question and the encoder's
 > temperature: the same two-option question on `siglip2-base-224` measured
 > `{'red': 0.997553, 'blue': 0.002447}` (also saturated), while a three-level `score`
 > on the same image came out `{0: 0.195, 1: 0.094, 2: 0.711}`. Saturation is the
-> encoder's doing, not the library's; see [Choosing an encoder](/docs/encoders).
+> encoder's doing, not the library's; see [Choosing an encoder](encoders.md).
 
 ## What it does not do
 
@@ -124,18 +124,18 @@ on is the encoder, not which side of the wire it runs on.
 
 | Page | Read it when |
 |---|---|
-| [Install](/docs/install) | Choosing between `jevimage`, `[local]`, `[serve]` and `[openclip]`, and what each pulls in. |
-| [Quickstart](/docs/quickstart) | You want the same walkthrough twice, once against a server and once in-process. |
-| [Question types](/docs/questions) | Writing questions: `choice`, `score`, `noul`, `head`, what each answer carries, and the two forms of `noul`. |
-| [Training a head](/docs/training) | Prompts are not good enough and you have labelled images. Also: how to tell whether training helped. |
-| [Choosing an encoder](/docs/encoders) | Picking from the registry, joining two with `+`, or plugging in your own model. |
-| [Serving](/docs/serving) | Running `jev serve` for other people: routes, API keys, limits. |
-| [CLI reference](/docs/reference-cli) | Driving it from a shell — `jev ask`, `jev train`, `jev heads`, local or `--url`. |
-| [Python reference](/docs/reference-python) | The exact public surface: every function, method and return shape. |
-| [HTTP reference](/docs/reference-http) | The routes, if you are writing your own client against a server. |
-| [Cookbook](/docs/cookbook) | Complete scripts: screening an upload, caching an embedding, routing a directory. |
-| [Troubleshooting](/docs/troubleshooting) | The error's sentence is clear but the reason it fired is not. |
+| [Install](install.md) | Choosing between `jevimage`, `[local]`, `[serve]` and `[openclip]`, and what each pulls in. |
+| [Quickstart](quickstart.md) | You want the same walkthrough twice, once against a server and once in-process. |
+| [Question types](questions.md) | Writing questions: `choice`, `score`, `noul`, `head`, what each answer carries, and the two forms of `noul`. |
+| [Training a head](training.md) | Prompts are not good enough and you have labelled images. Also: how to tell whether training helped. |
+| [Choosing an encoder](encoders.md) | Picking from the registry, joining two with `+`, or plugging in your own model. |
+| [Serving](serving.md) | Running `jevimage serve` for other people: routes, API keys, limits. |
+| [CLI reference](reference-cli.md) | Driving it from a shell - `jevimage ask`, `jevimage train`, `jevimage heads`, local or `--url`. |
+| [Python reference](reference-python.md) | The exact public surface: every function, method and return shape. |
+| [HTTP reference](reference-http.md) | The routes, if you are writing your own client against a server. |
+| [Cookbook](cookbook.md) | Complete scripts: screening an upload, caching an embedding, routing a directory. |
+| [Troubleshooting](troubleshooting.md) | The error's sentence is clear but the reason it fired is not. |
 
 ---
 
-[Install →](/docs/install)
+[Install →](install.md)

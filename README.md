@@ -12,10 +12,10 @@ same numbers, to the six decimals they are printed to, every time, and the tenth
 about an image costs a matmul rather than another forward pass once its captions are
 cached. A repeated question set is what gets cheap; a caption the process has never
 seen still costs one text-tower pass. When prompts are not good enough you fit a linear
-head on a folder of your own labelled images in seconds — and jevimage tells you, per
+head on a folder of your own labelled images in seconds - and jevimage tells you, per
 class, whether that head beat the prompts. Sometimes it did not, and it says so.
 
-Full documentation is in [docs/](http://13.50.56.146/docs/index/).
+Full documentation is in [docs/](https://docs.jevimage.org/docs/index/).
 
 ## Two ways to use it
 
@@ -31,8 +31,8 @@ Both are first class, and they are the same API. Pick the row you are in.
 
 The base install is an HTTP client. Asking, embedding, managing heads **and training**
 all work through it, because the encoder that fits the head lives on the server.
-`jev encoders` works with no torch on the machine, and `jev ask/train/heads/rm --url ...`
-(or `$JEV_URL` with `$JEV_API_KEY`) drive a server from the shell.
+`jevimage encoders` works with no torch on the machine, and `jevimage ask/train/heads/rm --url ...`
+(or `$JEVIMAGE_URL` with `$JEVIMAGE_API_KEY`) drive a server from the shell.
 
 In that install `jevimage.load()` does not fail obscurely; it names both fixes:
 
@@ -46,20 +46,40 @@ To use a server instead - no torch required - call jevimage.connect(url).
 
 ## Install
 
-Python 3.10+. Four installs, each a superset of the base. The package is **not on PyPI
-yet** — until it is, these mean `pip install .` and `pip install '.[local]'` against a
-clone, as [docs/install.md](http://13.50.56.146/docs/install/#from-source) shows:
+Python 3.10+. Four installs, each a superset of the base:
 
 ```bash
 pip install jevimage                # API only: pillow + stdlib. connect(), and the CLI's --url mode.
 pip install 'jevimage[local]'       # + torch, transformers. load() runs the encoder here.
-pip install 'jevimage[serve]'       # + fastapi, uvicorn. `jev serve` hosts it for others.
-pip install 'jevimage[openclip]'    # + open_clip, for the dfn5b-h-14-384 entry (Apple's licence — see below).
+pip install 'jevimage[serve]'       # + fastapi, uvicorn. `jevimage serve` hosts it for others.
+pip install 'jevimage[openclip]'    # + open_clip, for the dfn5b-h-14-384 entry (Apple's licence - see below).
 ```
 
 `[serve]` and `[openclip]` both include `[local]`, because a server runs the encoder and
-open_clip is an encoder. Sizes, offline and air-gapped use, and what the first `load()`
-downloads: [docs/install.md](http://13.50.56.146/docs/install/).
+open_clip is an encoder. `jevimage doctor` reports which of these this machine has and
+prints the command for anything missing.
+
+Then point it at a model. Either someone else's server, signed in once so every shell
+agrees:
+
+```bash
+jevimage login                    # key from console.jevimage.org
+```
+
+or your own, which needs no key and is found automatically:
+
+```bash
+jevimage serve                    # 127.0.0.1:8731; ask/train/heads probe for it
+```
+
+Having a key is what chooses the hosted API, whether `login` saved it or the shell
+exported `$JEVIMAGE_API_KEY` - a key is only good against the service that issued it.
+`--local` overrides it and means this machine: the server running here, or the weights
+in this process. Typing `jevimage` with no arguments says which of those you are on, and
+what is missing if it is neither.
+
+Sizes, offline and air-gapped use, and what the first `load()` downloads:
+[docs/install.md](https://docs.jevimage.org/docs/install/).
 
 ## Quickstart
 
@@ -106,12 +126,12 @@ An `Answer` is a `dict` subclass with attribute access: `a["colour"].choice` and
 The four question types are `choice` (one of 2–255 named options), `score` (a position
 on an ordered rubric), `noul` ("no-or-yes level": one yes/no probability) and `head` (a
 classifier you trained). Up to 64 of them ride one encode. See
-[docs/questions.md](http://13.50.56.146/docs/questions/).
+[docs/questions.md](https://docs.jevimage.org/docs/questions/).
 
 Training, in one line and with the honest number attached:
 
 ```console
-$ jev train colour ds/ --url http://127.0.0.1:8123
+$ jevimage train colour ds/ --url http://127.0.0.1:8123
 'colour': 12 examples, 2 classes, encoder toy
 
 class   n  zero-shot  trained   delta
@@ -131,31 +151,31 @@ per class.
 
 | Page | Read it when |
 |---|---|
-| [Overview](http://13.50.56.146/docs/index/) | You want the shape of the whole thing, including what it deliberately does not do. |
-| [Install](http://13.50.56.146/docs/install/) | Choosing between the four installs, or working offline. |
-| [Quickstart](http://13.50.56.146/docs/quickstart/) | The same walkthrough twice, once against a server and once in-process. |
-| [Question types](http://13.50.56.146/docs/questions/) | Writing questions: `choice`, `score`, `noul`, `head`, and the two forms of `noul`. |
-| [Training a head](http://13.50.56.146/docs/training/) | Prompts are not good enough and you have labelled images. Also: how to tell whether training helped. |
-| [Choosing an encoder](http://13.50.56.146/docs/encoders/) | Picking from the registry, joining two with `+`, or plugging in your own model. |
-| [Serving](http://13.50.56.146/docs/serving/) | Running `jev serve` for other people: routes, API keys, limits, deployment. |
-| [CLI reference](http://13.50.56.146/docs/reference-cli/) | `jev ask`, `train`, `heads`, `rm`, `encoders`, `serve` — local or `--url`. |
-| [Python reference](http://13.50.56.146/docs/reference-python/) | The exact public surface: every function, method and return shape. |
-| [HTTP reference](http://13.50.56.146/docs/reference-http/) | The routes, if you are writing your own client. |
-| [Cookbook](http://13.50.56.146/docs/cookbook/) | Complete scripts: screening an upload, caching an embedding, routing a directory. |
-| [Troubleshooting](http://13.50.56.146/docs/troubleshooting/) | The error's sentence is clear but the reason it fired is not. |
+| [Overview](https://docs.jevimage.org/docs/index/) | You want the shape of the whole thing, including what it deliberately does not do. |
+| [Install](https://docs.jevimage.org/docs/install/) | Choosing between the four installs, or working offline. |
+| [Quickstart](https://docs.jevimage.org/docs/quickstart/) | The same walkthrough twice, once against a server and once in-process. |
+| [Question types](https://docs.jevimage.org/docs/questions/) | Writing questions: `choice`, `score`, `noul`, `head`, and the two forms of `noul`. |
+| [Training a head](https://docs.jevimage.org/docs/training/) | Prompts are not good enough and you have labelled images. Also: how to tell whether training helped. |
+| [Choosing an encoder](https://docs.jevimage.org/docs/encoders/) | Picking from the registry, joining two with `+`, or plugging in your own model. |
+| [Serving](https://docs.jevimage.org/docs/serving/) | Running `jevimage serve` for other people: routes, API keys, limits, deployment. |
+| [CLI reference](https://docs.jevimage.org/docs/reference-cli/) | `jevimage ask`, `train`, `heads`, `rm`, `encoders`, `serve` - local or `--url`. |
+| [Python reference](https://docs.jevimage.org/docs/reference-python/) | The exact public surface: every function, method and return shape. |
+| [HTTP reference](https://docs.jevimage.org/docs/reference-http/) | The routes, if you are writing your own client. |
+| [Cookbook](https://docs.jevimage.org/docs/cookbook/) | Complete scripts: screening an upload, caching an embedding, routing a directory. |
+| [Troubleshooting](https://docs.jevimage.org/docs/troubleshooting/) | The error's sentence is clear but the reason it fired is not. |
 
 The pages are plain Markdown with relative links, so they read on GitHub as they are.
-[`mkdocs.yml`](https://github.com/jevimage/jevimage/blob/main/mkdocs.yml) is there if you want a searchable site instead:
+[`mkdocs.yml`](https://github.com/Per0x1de-1337/jevimage/blob/main/mkdocs.yml) is there if you want a searchable site instead:
 `pip install 'jevimage[docs]' && mkdocs serve`.
 
-Runnable examples live in [`examples/`](https://github.com/jevimage/jevimage/blob/main/examples/). The test suite is
+Runnable examples live in [`examples/`](https://github.com/Per0x1de-1337/jevimage/blob/main/examples/). The test suite is
 `pip install 'jevimage[dev]' && python -m pytest tests/ -q`.
 
 ## Licence
 
-MIT. See [LICENSE](https://github.com/jevimage/jevimage/blob/main/LICENSE).
+MIT. See [LICENSE](https://github.com/Per0x1de-1337/jevimage/blob/main/LICENSE).
 
-The model weights are not MIT and are not redistributed here — each one downloads from
+The model weights are not MIT and are not redistributed here - each one downloads from
 its own source under its own terms. In particular, `dfn5b-h-14-384` pulls Apple's DFN5B
 checkpoint, which carries **Apple's own licence**. Read it before you ship or redistribute
 anything built on that encoder. It sits behind the optional `[openclip]` extra for exactly

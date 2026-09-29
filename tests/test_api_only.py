@@ -128,7 +128,7 @@ def test_jev_rm_deletes_a_head_without_torch(tmp_path):
     (heads / "quick.pt").write_bytes(b"not a real head, and nothing should read it")
     out = run(f"""
         import os
-        os.environ["JEV_HEADS_DIR"] = {str(heads)!r}
+        os.environ["JEVIMAGE_HEADS_DIR"] = {str(heads)!r}
         from jevimage.cli import main
         raise SystemExit(main(["rm", "quick"]))
     """)
@@ -143,7 +143,7 @@ def test_jev_rm_refuses_a_bad_name_without_torch(tmp_path):
     r = subprocess.run(
         [sys.executable, "-c", BLOCK + textwrap.dedent(f"""
             import os
-            os.environ["JEV_HEADS_DIR"] = {str(heads)!r}
+            os.environ["JEVIMAGE_HEADS_DIR"] = {str(heads)!r}
             from jevimage.cli import main
             raise SystemExit(main(["rm", "../etc"]))
         """)], capture_output=True, text=True)

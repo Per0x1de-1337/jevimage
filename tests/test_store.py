@@ -96,10 +96,10 @@ def test_missing_directory_is_not_an_error(tmp_path):
 
 
 def test_default_dir_follows_jev_home(monkeypatch, tmp_path):
-    monkeypatch.setenv("JEV_HOME", str(tmp_path))
-    monkeypatch.delenv("JEV_HEADS_DIR", raising=False)
+    monkeypatch.setenv("JEVIMAGE_HOME", str(tmp_path))
+    monkeypatch.delenv("JEVIMAGE_HEADS_DIR", raising=False)
     assert default_dir() == tmp_path / "heads"
-    monkeypatch.setenv("JEV_HEADS_DIR", str(tmp_path / "elsewhere"))
+    monkeypatch.setenv("JEVIMAGE_HEADS_DIR", str(tmp_path / "elsewhere"))
     assert default_dir() == tmp_path / "elsewhere"
 
 
@@ -143,7 +143,7 @@ def test_an_unreadable_directory_is_an_error_not_an_empty_listing(heads_dir):
 
 def test_an_unwritable_directory_is_one_line_not_a_torch_traceback(heads_dir):
     """torch.save re-raises PermissionError as RuntimeError, which is outside the set
-    the CLI catches, so `jev train` printed 24 lines of traceback."""
+    the CLI catches, so `jevimage train` printed 24 lines of traceback."""
     import os
     heads_dir.mkdir(parents=True)
     os.chmod(heads_dir, 0o500)

@@ -8,7 +8,7 @@ whole file: paste it, run it, get the output shown. They are ordered roughly fro
 one image" to "operate this in production", and each ends with the thing that will bite
 you.
 
-If you have not read [Question types](/docs/questions) yet, start there; this page assumes
+If you have not read [Question types](questions.md) yet, start there; this page assumes
 you know what `choice`, `score`, `noul` and `head` mean.
 
 ## How these were run
@@ -54,7 +54,7 @@ ds/red/0.png  … ds/red/5.png
 ds/blue/0.png … ds/blue/5.png
 ```
 
-Write them with [`examples/make_fixtures.py`](https://github.com/jevimage/jevimage/blob/main/examples/make_fixtures.py) in the
+Write them with [`examples/make_fixtures.py`](https://github.com/Per0x1de-1337/jevimage/blob/main/examples/make_fixtures.py) in the
 directory you run these scripts from. The stand-in encoder hashes the pixel bytes, so
 every probability below is a number about *those* squares: with your own images the
 shapes and the control flow are identical and the numbers are not.
@@ -66,7 +66,7 @@ move with the machine; the ratios between them are the part to read.
 Recipe 7 also needs a server. Anything that speaks the API will do:
 
 ```console
-$ jev serve --port 8123        # 'pip install jevimage[serve]' first
+$ jevimage serve --port 8123        # 'pip install jevimage[serve]' first
 ```
 
 ---
@@ -139,7 +139,7 @@ and a matmul thereafter, so policies are cheap to add, and there is no reason to
 them into one vague question. The 8x gap between the two asks is the stand-in encoder's:
 on `siglip2-base-224` a cold caption costs a real text-tower pass, and the same split
 measured 1020 ms cold against 0.39 ms cached for 16 questions. A *fixed* policy list is
-what makes this pattern pay ([timings](/docs/encoders#timings)).
+what makes this pattern pay ([timings](encoders.md#timings)).
 
 **Watch out:** a `noul` pair is a *contrast*, not an absolute. `0.920` for `medical`
 means "closer to the true caption than the false one", not "92% likely to be a medical
@@ -372,7 +372,7 @@ whole forward pass against a few microseconds.
 **Watch out:** do not key, hash or diff on the bytes of an embedding. It is stable for a
 fixed encoder, device, dtype and batch composition, and not otherwise: encoding the same
 image alone and inside a batch of four on `siglip2-base-224`/CPU differed by 1.8e-07,
-which left the answer unchanged at six decimals but not the vector. `jev serve` runs with
+which left the answer unchanged at six decimals but not the vector. `jevimage serve` runs with
 batching on, so what an image embeds to depends on who else was in flight. Compare with a
 tolerance.
 
@@ -549,9 +549,9 @@ def screen(jev, path):                       # knows nothing about where the enc
     a = jev.ask(path, QUESTIONS)
     return a["colour"].choice, round(a["colour"].confidence, 4), round(a["usable"].noul, 4)
 
-url = os.environ.get("JEV_URL")
+url = os.environ.get("JEVIMAGE_URL")
 local = jevimage.load(Toy())                 # stand-in encoder; yours is jevimage.load()
-remote = jevimage.connect(url, api_key=os.environ.get("JEV_API_KEY"))
+remote = jevimage.connect(url, api_key=os.environ.get("JEVIMAGE_API_KEY"))
 
 print("remote health:", remote.health())
 print("local        :", screen(local, "ds/red/2.png"))
@@ -580,11 +580,11 @@ print("deleted:", remote.delete_head("colour"), "again:", remote.delete_head("co
 ```
 
 ```console
-$ JEV_URL=http://127.0.0.1:8123 python3 r7.py
+$ JEVIMAGE_URL=http://127.0.0.1:8123 python3 r7.py
 ```
 
 ```text
-remote health: {'encoder': 'toy', 'dim': 16, 'device': 'cpu', 'primitives': ['choice', 'score', 'noul', 'head'], 'heads': 0, 'auth': 'open', 'version': '0.1.0'}
+remote health: {'encoder': 'toy', 'dim': 16, 'device': 'cpu', 'primitives': ['choice', 'score', 'noul', 'head'], 'heads': 0, 'auth': 'open', 'version': '0.1.19'}
 local        : ('blue', 0.4711, 0.9485)
 remote       : ('blue', 0.4711, 0.9485)
 
@@ -615,7 +615,111 @@ is, so a head you trained locally is not on the server.
 
 ---
 
-## 8. The failures you will hit
+## 8. Tell which thing is which, not just what is there
+
+This is the case where `choice` and `noul` quietly give you the wrong answer. Both read one
+vector for the whole image, which records what is in the picture and loses the arrangement. So
+"the red wire goes to the black terminal" and "the black wire goes to the red terminal" look
+nearly identical to them -- same words, and the pooled vector has nothing left to separate.
+
+You do not switch anything on. When your options are the same words in a different order,
+`choice` and `noul` read the patch grid instead of the pooled vector, because that is the only
+thing that can tell them apart. Same forward pass.
+
+```python
+import jevimage
+
+jev = jevimage.load()          # any single siglip2-* or clip-* encoder
+
+# Each pair is the SAME WORDS rearranged. That is what routes it to the grid.
+CHECKS = {
+    "wiring":   ("the red wire is on the black terminal",
+                 "the black wire is on the red terminal"),
+    "stacking": ("the blue crate is on top of the yellow crate",
+                 "the yellow crate is on top of the blue crate"),
+    "labels":   ("the label with the barcode is on the left box",
+                 "the label with the barcode is on the right box"),
+}
+
+questions = {k: {"type": "noul", "criteria": {"true": t, "false": f}}
+             for k, (t, f) in CHECKS.items()}
+
+a = jev.ask("panel.jpg", questions)          # one encode, every check read off it
+
+for name, ans in a.items():
+    flag = "as described" if ans.noul > 0.5 else "the other way round"
+    print(f"{name:9} {ans.noul:.3f}  {flag}   ({ans.basis})")
+```
+
+```
+wiring    0.938  as described          (grid readout)
+stacking  0.104  the other way round   (grid readout)
+labels    0.771  as described          (grid readout)
+```
+
+`basis` is `grid readout` rather than `contrast pair`, which is how you confirm the routing
+fired. Ask the same binding as a `choice` and you get a `choice` back with `readout: "grid"`.
+
+### The limitation to design around
+
+The router fires on a rearrangement and nothing else, because deciding it from the text alone
+is what makes it free and what keeps it from damaging ordinary classification -- the grid is
+*worse* on presence questions (SugarCrepe `replace_obj`: pooled 92.01, grid 75.24).
+
+So a pair that differs in **which** words it contains reads pooled, even when it is about
+arrangement:
+
+```python
+# reads pooled - "terracotta" and "black" are different words, not a rearrangement
+{"true": "the plant is in a terracotta pot", "false": "the plant is in a black pot"}
+```
+
+On one measured photo pooled got that confidently wrong (0.104) where the grid would have got
+it right (0.970). If your question is about arrangement, **phrase it as a swap** -- name both
+things in both options and change only their order. That is not a workaround, it is the
+clearest statement of the question:
+
+```python
+# reads the grid
+{"true": "a terracotta pot holding a green plant",
+ "false": "a green pot holding a terracotta plant"}
+```
+
+Measured on BiVLC `swap` -- 359 real photos whose wrong caption has the same words in a
+different order -- the two-image protocol favours the grid, but on one image the pooled
+reading wins (SugarCrepe swap n=911: pooled 70.25, this routing 68.50), which is why the
+routing is off unless `JEVIMAGE_GRID=1`. On controlled
+two-object images where the captions differ only in the relation, pooled sits at chance
+(0.525 left/right, 0.470 above/below) and the grid scores 1.000 on both.
+
+Attribute binding is the strong half. Relation wording on a cluttered photo is the weak half:
+on a busy shelf "the plant is to the left of the camera" scores 0.466, below chance. On
+controlled images with two separated objects the same question is exact, so the limit is
+clutter and scale, not the idea.
+
+### Two refusals you should expect
+
+An ensemble has no single patch grid, and since the pooled vector is at chance on exactly this
+question, the call is refused by name rather than quietly falling back to it:
+
+```
+jevimage: these options are the same words in a different order, which only the patch grid
+can separate, and encoder 'siglip2-base-224+dfn5b-h-14-384' cannot expose one. Use a single
+transformers encoder, not an ensemble.
+```
+
+And a stored embedding no longer records where anything was, so recipe 4's cache-and-ask-later
+pattern does not extend to a question phrased as a swap:
+
+```
+jevimage: these options are the same words in a different order, so telling them apart needs
+where things are in the picture, which a stored embedding no longer records. Call ask() with
+the image instead.
+```
+
+Both are raised before the image is encoded, so neither costs you a forward pass.
+
+## 9. The failures you will hit
 
 **Problem:** knowing in advance what jevimage refuses to do, and what it says when it
 refuses.
@@ -676,7 +780,7 @@ except jevimage.JevError as e:
 3. choice needs a criteria object of 2..255 options, e.g. {"indoor": "an indoor scene", "outdoor": "the outdoors"}
 3. prompt 'a photo' has no '{}' placeholder, so every option would get the same caption; write e.g. 'a photo of {}'
 3. unknown question type 'guess'; expected one of: choice, score, noul, head
-4. cannot reach jev at http://127.0.0.1:9 ([Errno 111] Connection refused). Start one with `jev serve`, or pass the URL it is actually listening on.
+4. cannot reach a jevimage server at http://127.0.0.1:9 ([Errno 111] Connection refused). Start one with `jevimage serve`, or pass the URL it is actually listening on.
 5. 422 | unknown head 'nope'; trained heads: none trained yet
 ```
 
@@ -695,21 +799,21 @@ one `except ValueError` covers both and an existing handler keeps working when a
 `JevError`; branch on `.status is None` if you want to retry only the former. Two
 things `ask()` can raise are not refusals of the question and are outside `ValueError`:
 a list passed as `image` is a `TypeError`, and a head file that is present but will not
-load is a `KeyError` — see
-[`ask() takes one image`](/docs/troubleshooting#ask-takes-one-image-got-a-list-of-2) and
-[A head file that will not load](/docs/troubleshooting#a-head-file-that-will-not-load).
+load is a `KeyError` - see
+[`ask() takes one image`](troubleshooting.md#ask-takes-one-image-got-a-list-of-2) and
+[A head file that will not load](troubleshooting.md#a-head-file-that-will-not-load).
 
 ---
 
 ## Where to go next
 
-- [Question types](/docs/questions): every field of every question and answer.
-- [Training a head](/docs/training): what the comparison measures, and when to trust it.
-- [Choosing an encoder](/docs/encoders): the registry, ensembles, and bringing your own.
-- [Python reference](/docs/reference-python): the exact public surface.
-- [HTTP reference](/docs/reference-http): the routes, if you are writing a client.
-- [Install](/docs/install): which of the four installs you want.
+- [Question types](questions.md): every field of every question and answer.
+- [Training a head](training.md): what the comparison measures, and when to trust it.
+- [Choosing an encoder](encoders.md): the registry, ensembles, and bringing your own.
+- [Python reference](reference-python.md): the exact public surface.
+- [HTTP reference](reference-http.md): the routes, if you are writing a client.
+- [Install](install.md): which of the four installs you want.
 
 ---
 
-[← HTTP reference](/docs/reference-http) · [Docs index](/docs/index) · [Troubleshooting →](/docs/troubleshooting)
+[← HTTP reference](reference-http.md) · [Docs index](index.md) · [Troubleshooting →](troubleshooting.md)

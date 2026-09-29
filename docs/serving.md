@@ -1,6 +1,6 @@
 ---
 title: "Serving"
-description: "jev serve, API keys, limits, deployment and what to monitor."
+description: "jevimage serve, API keys, limits, deployment and what to monitor."
 ---
 
 Running jevimage for other people. One process holds the encoder; everyone else installs
@@ -10,7 +10,7 @@ Running jevimage for other people. One process holds the encoder; everyone else 
 Every route under `/v1` is one method on `jevimage.Jev`, so there is no second API to
 learn: `/v1/ask` is `ask()`, `/v1/embed` is `embed()`, `/v1/heads` is
 `train`/`list_heads`/`delete_head`. The wire format itself is in
-[reference-http.md](/docs/reference-http); this page is about operating the thing.
+[reference-http.md](reference-http.md); this page is about operating the thing.
 
 > Every transcript below was run against a **deterministic stand-in encoder** (16-dim,
 > no downloads), so the transcripts reproduce in a second. Statuses, error text,
@@ -25,53 +25,66 @@ $ pip install 'jevimage[serve]'
 ```
 
 `[serve]` implies `[local]`: a server runs the encoder, so it pulls torch, transformers,
-fastapi and uvicorn. See [install.md](/docs/install) for what each extra costs.
+fastapi and uvicorn. See [install.md](install.md) for what each extra costs.
 
 ## Starting it
 
-### `jev serve`
+### `jevimage serve`
 
 ```console
-$ jev serve --help
-usage: jev serve [-h] [--host HOST] [--port PORT] [--encoder ENCODER]
-                 [--heads-dir HEADS_DIR] [--api-key KEY [KEY ...]]
+$ jevimage serve --help
+usage: jevimage serve [-h] [--host HOST] [--port PORT] [--encoder ENCODER]
+                      [--heads-dir HEADS_DIR] [--api-key KEY [KEY ...]]
 
 options:
   -h, --help            show this help message and exit
   --host HOST
-  --port PORT
+  --port PORT           default 8731; if it is taken, the next free port up to 8740 is
+                        used
   --encoder ENCODER
   --heads-dir HEADS_DIR
   --api-key KEY [KEY ...]
                         require one of these keys; without it the API is open
 ```
 
-Defaults: `--host 127.0.0.1`, `--port 8000`, the registry default encoder
-(`siglip2-base-224`), heads in `$JEV_HEADS_DIR`, else `$JEV_HOME/heads`, else
+Defaults: `--host 127.0.0.1`, `--port 8731`, the registry default encoder
+(`siglip2-base-224`), heads in `$JEVIMAGE_HEADS_DIR`, else `$JEVIMAGE_HOME/heads`, else
 `~/.jev/heads`, and **no key**.
 
+8731 rather than 8000 because 8000 is the default of every other Python web server on
+the machine, and losing that race after twelve seconds of loading the model is a bad
+way to find out. If 8731 is taken too, `serve` walks up to 8740, prints which port it
+took, and errors only when all ten are busy.
+
+**The walk is a convenience for a laptop, not a deployment feature.** `--port` moves
+where it starts but does not switch it off, so a pinned port that is busy still moves -
+and an `upstream 127.0.0.1:8731` that quietly became 8732 on restart is a 502 your proxy
+config cannot see. Behind a proxy, run uvicorn directly, as the systemd and Docker
+examples below do: `uvicorn jevimage.server:app --port 8731` binds that port or fails,
+which is what you want from a unit file.
+
 The flags are not passed to the app object. They are written into the environment
-(`JEV_ENCODER`, `JEV_HEADS_DIR`, `JEV_API_KEYS`) and the app reads them itself, so the
+(`JEVIMAGE_ENCODER`, `JEVIMAGE_HEADS_DIR`, `JEVIMAGE_API_KEYS`) and the app reads them itself, so the
 same knobs work when a container or a process manager starts uvicorn directly:
 
 ```console
-$ JEV_ENCODER=siglip2-so400m-384 JEV_HEADS_DIR=/var/lib/jev/heads \
-  uvicorn jevimage.server:app --host 0.0.0.0 --port 8000
+$ JEVIMAGE_ENCODER=siglip2-so400m-384 JEVIMAGE_HEADS_DIR=/var/lib/jev/heads \
+  uvicorn jevimage.server:app --host 0.0.0.0 --port 8731
 ```
 
-`jev serve` is a single uvicorn process with no `--workers`, no TLS flags and no
+`jevimage serve` is a single uvicorn process with no `--workers`, no TLS flags and no
 `--reload`. When you want any of those, run uvicorn yourself; the two paths build the
 identical app.
 
-**`jev serve` only sees the built-in encoder registry.** The CLI never imports your code,
+**`jevimage serve` only sees the built-in encoder registry.** The CLI never imports your code,
 so a registered custom encoder is invisible to it:
 
 ```console
-$ jev serve --encoder nope
-jev: unknown encoder 'nope'. Available: clip-vit-l-14, dfn5b-h-14-384, metaclip2-huge,
+$ jevimage serve --encoder nope
+jevimage: unknown encoder 'nope'. Available: clip-vit-l-14, dfn5b-h-14-384, metaclip2-huge,
 siglip2-base-224, siglip2-base-384, siglip2-giant-384, siglip2-so400m-384. Register your
 own with jevimage.register(name, factory) - from Python, in the process that will serve
-it; the `jev` command only sees these built-in names, because it never imports your code.
+it; the `jevimage` command only sees these built-in names, because it never imports your code.
 $ echo $?
 1
 ```
@@ -97,15 +110,15 @@ if __name__ == "__main__":
 ```console
 $ python serve_toy.py &
 $ curl -s http://127.0.0.1:8124/v1/health
-{"encoder":"toy","dim":16,"device":"cpu","primitives":["choice","score","noul","head"],"heads":0,"auth":"bearer","version":"0.1.0"}
+{"encoder":"toy","dim":16,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"bearer","version":"0.1.19"}
 ```
 
 `build_app(jev=None, *, api_keys=None)`:
 
-- `jev=None` calls `jevimage.load(batch=True)`, which reads `$JEV_ENCODER` and
-  `$JEV_HEADS_DIR`. Pass a `Jev` to control the encoder, the heads directory, the
+- `jev=None` calls `jevimage.load(batch=True)`, which reads `$JEVIMAGE_ENCODER` and
+  `$JEVIMAGE_HEADS_DIR`. Pass a `Jev` to control the encoder, the heads directory, the
   temperature, or batching.
-- `api_keys=None` reads `$JEV_API_KEYS`. Pass a list to set them in code. Note that
+- `api_keys=None` reads `$JEVIMAGE_API_KEYS`. Pass a list to set them in code. Note that
   `api_keys=[]` means *open*, overriding the environment.
 
 Keeping `app` at module level (rather than only inside `__main__`) is what lets you run
@@ -141,7 +154,7 @@ $ uvicorn mount_toy:api --host 127.0.0.1 --port 8735 &
 $ curl -s http://127.0.0.1:8735/ ; echo
 {"service":"my app"}
 $ curl -s http://127.0.0.1:8735/jev/v1/health ; echo
-{"encoder":"toy","dim":16,"device":"cpu","primitives":["choice","score","noul","head"],"heads":0,"auth":"open","version":"0.1.0"}
+{"encoder":"toy","dim":16,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"open","version":"0.1.19"}
 ```
 
 (`mount_toy.py` has no `uvicorn.run` of its own - it is a module for a server to import,
@@ -164,18 +177,18 @@ Authorization: Bearer <key>
 The scheme token is case-insensitive (RFC 7235 §2.1) and any run of whitespace separates
 it from the key, so `bearer <key>` is accepted; the key itself is compared exactly.
 
-Keys come from `$JEV_API_KEYS`, split on commas **and** whitespace, so both spellings
+Keys come from `$JEVIMAGE_API_KEYS`, split on commas **and** whitespace, so both spellings
 work and a unit file that copies the CLI's comma form cannot produce a key with a space
 in it:
 
 ```console
-$ JEV_API_KEYS="k1, k2 k3" python -c "import os; print(os.environ['JEV_API_KEYS'].replace(',',' ').split())"
+$ JEVIMAGE_API_KEYS="k1, k2 k3" python -c "import os; print(os.environ['JEVIMAGE_API_KEYS'].replace(',',' ').split())"
 ['k1', 'k2', 'k3']
 ```
 
 Any one of them is accepted; comparison is `hmac.compare_digest` against each. A junk or
 non-ASCII header is a 401, not a 500. Empty strings are dropped before the guard is built,
-so `api_keys=[os.environ.get("JEV_KEY", "")]` on a host where that variable is unset is
+so `api_keys=[os.environ.get("JEVIMAGE_KEY", "")]` on a host where that variable is unset is
 an *open* server that says `"auth": "open"`, not one that claims to be protected and is
 not.
 
@@ -185,7 +198,7 @@ onto the redirect target (a different host, or a downgraded scheme, included), s
 302 from a hostile or compromised server would hand over the key. A 3xx surfaces as a
 `JevError` naming the `Location`. That still leaves the transport: over plain `http://`,
 as every example on this page does, the key is on the wire in clear. Terminate TLS in
-front of `jev serve` for anything that leaves a trusted network.
+front of `jevimage serve` for anything that leaves a trusted network.
 
 `$IMG` in the transcripts below is one base64 image, made once:
 
@@ -199,7 +212,7 @@ $ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8124/v1/embe
 401
 $ curl -s -X POST http://127.0.0.1:8124/v1/embed -H 'Authorization: Bearer wrong' \
     -H 'Content-Type: application/json' -d "{\"image\":\"$IMG\"}"
-{"detail":"send 'Authorization: Bearer <key>' with a key this server was started with (JEV_API_KEYS)"}
+{"detail":"send 'Authorization: Bearer <key>' with a key this server was started with (JEVIMAGE_API_KEYS)"}
 $ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8124/v1/embed \
     -H 'Authorization: s3cret' -H 'Content-Type: application/json' -d "{\"image\":\"$IMG\"}"
 401
@@ -245,7 +258,7 @@ Not "read-only open". Open:
 
 ```console
 $ curl -s http://127.0.0.1:8731/v1/health ; echo
-{"encoder":"toy",...,"auth":"open","version":"0.1.0"}
+{"encoder":"toy",...,"auth":"open","version":"0.1.19"}
 $ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8731/v1/heads \
     -H 'Content-Type: application/json' --data-binary @train.json
 200
@@ -260,7 +273,7 @@ with no key, behind a proxy that does the authentication, is a reasonable setup;
 with no key is not.
 
 Put the keys in a file that only the service user can read, not on the command line.
-`jev serve --api-key hunter2` shows up in `ps` for every user on the box. The systemd
+`jevimage serve --api-key hunter2` shows up in `ps` for every user on the box. The systemd
 unit below uses `EnvironmentFile` for exactly this.
 
 ## The limits the server enforces
@@ -282,10 +295,10 @@ Everything each refusal returns, verified against a running server:
 
 | Status | Cause | Body |
 |---|---|---|
-| 401 | missing, malformed or wrong key | `send 'Authorization: Bearer <key>' with a key this server was started with (JEV_API_KEYS)` |
+| 401 | missing, malformed or wrong key | `send 'Authorization: Bearer <key>' with a key this server was started with (JEVIMAGE_API_KEYS)` |
 | 404 | `GET` an absent head | `no head named 'nope' (have: none)`. The store names the directory it searched, and the server strips it back out on the way to the client |
 | 404 | `DELETE` an absent head | `no head named 'nope'`. The route's own message, without the inventory |
-| 404 | a head file that is present but will not load | `junkdoc.pt is present but unreadable: <the loader's first line>. Delete it, or retrain the head.` From `GET`, from `/compare`, and from a `head` question on `/v1/ask`; the full body is pasted in [reference-http.md](/docs/reference-http#get-v1headsname) |
+| 404 | a head file that is present but will not load | `junkdoc.pt is present but unreadable: <the loader's first line>. Delete it, or retrain the head.` From `GET`, from `/compare`, and from a `head` question on `/v1/ask`; the full body is pasted in [reference-http.md](reference-http.md#get-v1headsname) |
 | 409 | `compare` on a head stored without its embeddings | `head 'noemb' was saved without its embeddings, so it cannot be compared; retrain it to restore this` |
 | 413 | too many images | `at most 8 images per request; got 9` |
 | 413 | base64 too long | `images[0] is 13MB of base64; the limit is 12MB per image` |
@@ -423,7 +436,7 @@ warms up once.
 
 ```console
 $ curl -s http://127.0.0.1:8124/v1/health ; echo
-{"encoder":"toy","dim":16,"device":"cpu","primitives":["choice","score","noul","head"],"heads":0,"auth":"bearer","version":"0.1.0"}
+{"encoder":"toy","dim":16,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"bearer","version":"0.1.19"}
 ```
 
 - Never authenticated, on purpose.
@@ -486,14 +499,14 @@ stable enough to read for metrics, and nothing else here is.
 ## Reverse proxy and TLS
 
 jevimage has no TLS and no CORS headers. A browser page on another origin cannot call it,
-and `jev serve` cannot terminate HTTPS. Both belong to a proxy in front.
+and `jevimage serve` cannot terminate HTTPS. Both belong to a proxy in front.
 
 The proxy caps the whole body; the server does not.
 
 ```caddyfile
 jev.example.com {
 	# TLS is Caddy's job, not the app's: jevimage has no certificate handling.
-	reverse_proxy 127.0.0.1:8000
+	reverse_proxy 127.0.0.1:8731
 
 	# The server caps images individually (12MB of base64, 8 per request) but puts no
 	# ceiling on a whole body, and /v1/heads takes up to 4000 of them. This is that
@@ -561,14 +574,14 @@ WorkingDirectory=/srv/jev
 
 # The encoder and where heads are written. build_app() reads these itself, so there is
 # no second place to keep them in sync.
-Environment=JEV_ENCODER=siglip2-base-224
-Environment=JEV_HEADS_DIR=/var/lib/jev/heads
+Environment=JEVIMAGE_ENCODER=siglip2-base-224
+Environment=JEVIMAGE_HEADS_DIR=/var/lib/jev/heads
 Environment=HF_HOME=/var/lib/jev/hf
-# JEV_API_KEYS=key1,key2 - a separate file so the keys are not in the unit, and so
+# JEVIMAGE_API_KEYS=key1,key2 - a separate file so the keys are not in the unit, and so
 # rotating them is `systemctl restart`, not an edit of a world-readable unit.
 EnvironmentFile=/etc/jev/keys.env
 
-ExecStart=/srv/jev/venv/bin/uvicorn jevimage.server:app --host 127.0.0.1 --port 8000
+ExecStart=/srv/jev/venv/bin/uvicorn jevimage.server:app --host 127.0.0.1 --port 8731
 
 # First boot downloads the weights; the socket does not open until that finishes.
 TimeoutStartSec=900
@@ -605,7 +618,7 @@ Why these bits:
 - `Restart=on-failure`, not `always`: a config error that makes the encoder unloadable
   should stay down and visible, not loop while pulling weights.
 - `/etc/jev/keys.env` should be `chmod 600`, owned by root, containing one line:
-  `JEV_API_KEYS=key1,key2`.
+  `JEVIMAGE_API_KEYS=key1,key2`.
 
 ## A worked deployment: Docker
 
@@ -624,26 +637,26 @@ RUN pip install '.[serve]'
 
 # Bake the weights into the image. Without this the first request after every deploy
 # waits on a multi-gigabyte download, and a node with no egress never becomes ready.
-ENV HF_HOME=/models JEV_ENCODER=siglip2-base-224
+ENV HF_HOME=/models JEVIMAGE_ENCODER=siglip2-base-224
 RUN python -c "import jevimage; jevimage.load()" && chmod -R a+rX /models
 
 # Heads are state. Mount a volume here or they die with the container.
-ENV JEV_HEADS_DIR=/var/lib/jev/heads
+ENV JEVIMAGE_HEADS_DIR=/var/lib/jev/heads
 RUN mkdir -p /var/lib/jev/heads && chown 65534:65534 /var/lib/jev/heads
 USER 65534
 
-EXPOSE 8000
+EXPOSE 8731
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s \
   CMD python -c "import urllib.request,sys; \
-sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/v1/health',timeout=4).status==200 else 1)"
+sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8731/v1/health',timeout=4).status==200 else 1)"
 
-CMD ["uvicorn", "jevimage.server:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "jevimage.server:app", "--host", "0.0.0.0", "--port", "8731"]
 ```
 
 ```console
 $ docker build -t jevimage .
-$ docker run -d --name jev -p 127.0.0.1:8000:8000 \
-    -e JEV_API_KEYS="$(cat /etc/jev/key)" \
+$ docker run -d --name jevimage -p 127.0.0.1:8731:8731 \
+    -e JEVIMAGE_API_KEYS="$(cat /etc/jev/key)" \
     -v jev-heads:/var/lib/jev/heads \
     jevimage
 ```
@@ -654,13 +667,13 @@ $ docker run -d --name jev -p 127.0.0.1:8000:8000 \
 > jevimage.server:app`, the health route, where heads are written), not from a build log.
 > Treat it as a starting point and read the build output.
 
-`--host 0.0.0.0` inside the container is right; publishing it as `-p 127.0.0.1:8000:8000`
-is what keeps it off the network. `-p 8000:8000` publishes it to the world, and the
+`--host 0.0.0.0` inside the container is right; publishing it as `-p 127.0.0.1:8731:8731`
+is what keeps it off the network. `-p 8731:8731` publishes it to the world, and the
 container has no key unless you gave it one.
 
 For a GPU: start from `nvidia/cuda:12.4.1-runtime-ubuntu22.04`, drop the CPU index, and
 run with `--gpus all`. `resolve_device()` picks CUDA automatically when torch sees it, and
-`$JEV_DEVICE` overrides.
+`$JEVIMAGE_DEVICE` overrides.
 
 ## Scaling
 
@@ -684,7 +697,7 @@ Given that, the knobs in order:
    seen: ten questions in one `/v1/ask` is one encode, and the second question costs a
    matmul. A caption this process has *not* encoded before costs a text-tower pass
    first, so a request full of fresh captions is not free; see
-   [encoders.md](/docs/encoders#timings).
+   [encoders.md](encoders.md#timings).
 2. **Send lists.** `/v1/embed` with 8 images is one forward pass. Client-side,
    `Remote.embed()` chunks to 8 for you.
 3. **Keep `batch=True`** (the default) if callers send single images concurrently. It
@@ -724,7 +737,7 @@ client that trains on one and asks on the other gets a 404 half the time.
 
 ## Failure modes
 
-**Changing `JEV_ENCODER` invalidates every head.** A head records the encoder that fitted
+**Changing `JEVIMAGE_ENCODER` invalidates every head.** A head records the encoder that fitted
 it and refuses to run under another one. Silently wrong results are the alternative, and
 the widths often match by accident:
 
@@ -754,7 +767,7 @@ every encoder."} [422]
 ```
 
 If your callers are not all yours, serve an encoder with a bias or tell them to use the
-pair form. See [questions.md](/docs/questions).
+pair form. See [questions.md](questions.md).
 
 **Head names are global and unversioned.** `POST /v1/heads` with an existing name
 overwrites it, and returns 200 either way. There is no per-caller namespace: one client's
@@ -766,7 +779,7 @@ as broken rather than skipped, and asking for it gives a 404 whose body says the
 present and why it would not load, not "no such head", which would be a lie about a file
 sitting right there. That 404 is the only place a server shows it: `GET /v1/heads` lists
 only the heads that loaded, and `/v1/health`'s `heads` count leaves it out. To see the
-broken ones as a set, look at the heads directory, or run `jev heads --json` beside it.
+broken ones as a set, look at the heads directory, or run `jevimage heads --json` beside it.
 
 **A restart drops the caption cache,** so the first request after a deploy re-encodes its
 captions. Milliseconds, but it shows up as a p99 spike on a busy dashboard.
@@ -777,14 +790,14 @@ head that appears anyway.
 
 ## See also
 
-- [reference-http.md](/docs/reference-http): the exact request and response shapes.
-- [install.md](/docs/install): what each extra pulls in.
-- [encoders.md](/docs/encoders): the registry, ensembles, and writing your own.
-- [reference-python.md](/docs/reference-python): `Jev.train` and `compare`: what
+- [reference-http.md](reference-http.md): the exact request and response shapes.
+- [install.md](install.md): what each extra pulls in.
+- [encoders.md](encoders.md): the registry, ensembles, and writing your own.
+- [reference-python.md](reference-python.md): `Jev.train` and `compare`: what
   `/v1/heads` fits.
-- [reference-cli.md](/docs/reference-cli): `jev ask/train/heads/rm --url` against the
+- [reference-cli.md](reference-cli.md): `jevimage ask/train/heads/rm --url` against the
   server you just started.
 
 ---
 
-[← Choosing an encoder](/docs/encoders) · [Docs index](/docs/index) · [CLI reference →](/docs/reference-cli)
+[← Choosing an encoder](encoders.md) · [Docs index](index.md) · [CLI reference →](reference-cli.md)

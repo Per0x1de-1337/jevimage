@@ -1,7 +1,7 @@
 """The HTTP client: `jevimage.connect(url)` where you would have written `jevimage.load()`.
 
 Remote has the method names, the arguments and the return types of `jevimage.Jev`, so
-moving a script from an in-process encoder to a `jev serve` box is a one-line change and
+moving a script from an in-process encoder to a `jevimage serve` box is a one-line change and
 nothing downstream notices - `ask` still hands back `Answer` objects, `train` still
 hands back a `jevimage.Head`, and `embed` still hands back a (n, dim) fp32 tensor when
 torch is installed (a list of lists when it is not, since an API-only install has none).
@@ -40,7 +40,7 @@ import urllib.parse
 from pathlib import Path
 
 from .answers import Answer, normalise_questions, positive_temperature
-from .images import Head, as_examples, to_image
+from .images import Head, as_examples, to_image, upright
 from .store import valid_name
 
 __all__ = ["Remote", "JevError", "MAX_IMAGES"]
@@ -91,22 +91,32 @@ def _shrink(raw: bytes, max_edge: int) -> bytes | None:
     Image.open reads the header only, so an image already within `max_edge` costs a
     few microseconds and is passed through byte for byte.
     """
-    from PIL import Image, ImageOps
+    from PIL import Image
 
     try:
         im = Image.open(io.BytesIO(raw))
         if max(im.size) <= max_edge:
             return None            # passed through with its EXIF; the server transposes
+
+        # draft() BEFORE anything touches the pixels. A JPEG decoder can scale by 1/2,
+        # 1/4 or 1/8 while it decodes, for free - a 4032px phone photo comes out of the
+        # DCT at 504px instead of being decoded in full and then thrown away. It only
+        # works on an image that has not been loaded yet, which is why `.convert("RGB")`
+        # used to cost the whole win: thumbnail() calls draft() itself, and by then the
+        # full-size decode had already happened. Not a JPEG, or already small enough:
+        # draft returns None and nothing changes.
+        im.draft("RGB", (max_edge, max_edge))
         # exif_transpose before re-encoding: save() drops the Orientation tag, so a
         # portrait phone photo would otherwise arrive sideways with nothing left on it
         # for the server to act on, and remote answers would diverge from local ones.
-        im = ImageOps.exif_transpose(im).convert("RGB")
+        im = upright(im)
         im.thumbnail((max_edge, max_edge), Image.LANCZOS)
         buf = io.BytesIO()
         im.save(buf, "JPEG", quality=92)
     except Exception:
         return None            # unreadable here is the server's 415 to give, not ours
-    return buf.getvalue() if len(buf.getvalue()) < len(raw) else None
+    out = buf.getvalue()
+    return out if len(out) < len(raw) else None
 
 
 def _data_url(src, max_edge: int | None = MAX_EDGE) -> str:
@@ -137,8 +147,7 @@ def _data_url(src, max_edge: int | None = MAX_EDGE) -> str:
                     raw, mime = smaller, "image/jpeg"
             return f"data:{mime};base64,{base64.b64encode(raw).decode()}"
 
-    from PIL import ImageOps
-    im = ImageOps.exif_transpose(to_image(src)).convert("RGB")
+    im = upright(to_image(src))
     if max_edge and max(im.size) > max_edge:
         im.thumbnail((max_edge, max_edge), _resample())
         buf = io.BytesIO()
@@ -166,10 +175,27 @@ def _detail(body: bytes) -> str:
     return json.dumps(parsed)
 
 
-class Remote:
-    """A `jev serve` instance, with the same methods as `jevimage.Jev`.
+def _answers(r: dict) -> dict:
+    """The answers, out of either server's envelope.
 
-        jev = jevimage.connect("http://localhost:8000")
+    A self-hosted `jevimage serve` answers about one image and puts them at the top
+    level. The hosted API answers about a list and puts each image's under `results[i]`.
+    Same answers, two envelopes - and a client that reads only one of them fails with a
+    KeyError whose whole text is 'answers', which is the least useful thing it could say.
+    """
+    if "answers" in r:
+        return r["answers"]
+    results = r.get("results")
+    if isinstance(results, list) and results and "answers" in results[0]:
+        return results[0]["answers"]
+    raise JevError("the server replied without answers in it; its keys were "
+                   f"{', '.join(sorted(r)) or '(none)'}. Is that URL a jevimage server?")
+
+
+class Remote:
+    """A `jevimage serve` instance, with the same methods as `jevimage.Jev`.
+
+        jev = jevimage.connect("http://localhost:8731")
         jev.ask("photo.jpg", {"scene": {"type": "choice", "criteria": {...}}})
 
     One instance is safe to share between threads: the socket it keeps open is held
@@ -186,7 +212,7 @@ class Remote:
         if api_key is not None:
             # a key read from a file or $(cat) carries a newline, and http.client then
             # fails deep inside putheader with the key itself in the traceback. The
-            # server splits $JEV_API_KEYS on whitespace, so such a key is never valid.
+            # server splits $JEVIMAGE_API_KEYS on whitespace, so such a key is never valid.
             if api_key != api_key.strip() or not api_key:
                 raise ValueError("api_key has surrounding whitespace or is empty; "
                                  "strip it (the value is not shown here on purpose)")
@@ -272,9 +298,18 @@ class Remote:
                     # train it again (and bill it again) with the caller none the wiser.
                     if reused and attempt == 0 and method in ("GET", "DELETE"):
                         continue
+                    # `jevimage serve` does not terminate TLS, so an https:// URL
+                    # pointed at one gets WRONG_VERSION_NUMBER out of OpenSSL - which
+                    # describes the bytes rather than the mistake.
+                    plain = (self.url.startswith("https://")
+                             and "WRONG_VERSION_NUMBER" in str(e))
                     raise JevError(
-                        f"cannot reach jev at {self.url} ({e}). Start one with "
-                        "`jev serve`, or pass the URL it is actually listening on."
+                        f"cannot reach a jevimage server at {self.url} ({e}). "
+                        + ("That server is speaking plain HTTP: use http://, or put a "
+                           "proxy in front of it to terminate TLS."
+                           if plain else
+                           "Start one with `jevimage serve`, or pass the URL it is "
+                           "actually listening on.")
                     ) from None
 
         if 300 <= status < 400:
@@ -300,7 +335,7 @@ class Remote:
         except ValueError:
             snippet = payload[:80].decode("utf-8", "replace").strip()
             detail = (f"{url} answered {status} but not JSON ({snippet!r}); "
-                      "is that a jev server?")
+                      "is that a jevimage server?")
             raise JevError(detail, status=status, detail=detail) from None
 
     def health(self) -> dict:
@@ -310,7 +345,25 @@ class Remote:
         wire - so this is how you ask which encoder your heads will be trained under,
         and whether single-caption `noul` will work.
         """
-        return self._call("GET", "/v1/health")
+        h = self._call("GET", "/v1/health")
+        if "primitives" in h:
+            return h
+        # The hosted API keeps /v1/health for liveness alone and puts the capability
+        # document behind /v1/models. Same question, different door; answered in the
+        # shape this method promises so a caller does not have to know which it reached.
+        try:
+            m = self._call("GET", "/v1/models")
+        except JevError:
+            return h                # no key, or not a jevimage server: say what we saw
+        return {"encoder": m.get("model"), "dim": m.get("dim"),
+                "device": m.get("device", "hosted"),
+                "primitives": m.get("primitives", []),
+                "heads": len(m.get("heads") or []),
+                # who the key belongs to, when the server says. Two accounts see two
+                # different lists of heads, correctly, and the difference is otherwise
+                # invisible from a shell.
+                "account": m.get("account"),
+                "auth": "bearer", "version": str(m.get("version", ""))}
 
     # -- embedding -------------------------------------------------------
     def embed(self, images):
@@ -359,7 +412,7 @@ class Remote:
         r = self._call("POST", "/v1/ask", {"image": _data_url(image, self.max_edge),
                                            "questions": questions,
                                            "temperature": temperature})
-        return {qid: Answer(a) for qid, a in r["answers"].items()}
+        return {qid: Answer(a) for qid, a in _answers(r).items()}
 
     # -- training --------------------------------------------------------
     def train(self, name, data, *, epochs=500, max_per_class=None) -> Head:
@@ -401,7 +454,15 @@ class Remote:
         return Head(name, self._call("GET", f"/v1/heads/{valid_name(name)}"))
 
     def list_heads(self) -> list[dict]:
-        return self._call("GET", "/v1/heads")
+        try:
+            return self._call("GET", "/v1/heads")
+        except JevError as e:
+            if e.status != 404:
+                raise
+            # An older hosted API published its heads only in the capability document
+            # and had no /v1/heads at all. The list is the same list, so answer it
+            # rather than handing back a 404 for something that is right there.
+            return (self._call("GET", "/v1/models").get("heads") or [])
 
     def delete_head(self, name) -> bool:
         try:
@@ -558,7 +619,7 @@ def demo():
         jevimage.connect(f"http://127.0.0.1:{dead}", timeout=2).list_heads()
         raise AssertionError("a closed port did not raise")
     except JevError as err:
-        assert f"127.0.0.1:{dead}" in str(err) and "jev serve" in str(err), err
+        assert f"127.0.0.1:{dead}" in str(err) and "jevimage serve" in str(err), err
 
     # a redirect must not carry the key onward: an HTTP client that followed one would
     # copy Authorization to the

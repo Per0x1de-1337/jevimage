@@ -1,7 +1,7 @@
 """The shapes a request and its answers take, with no dependency on torch.
 
 This module is deliberately pure Python. An API-only install - someone who just calls a
-`jev serve` instance over HTTP - gets the same Answer objects as someone running the
+`jevimage serve` instance over HTTP - gets the same Answer objects as someone running the
 models locally, without installing a deep-learning stack to do it.
 """
 from __future__ import annotations
@@ -86,6 +86,10 @@ class Answer(dict):
             return (f"<{self['type']} {self['choice']!r} "
                     f"p={max(self['probabilities'].values()):.3f}>")
         if "noul" in self:
+            # the grid reading also returns a noul, and its point is that it read the
+            # arrangement, so the repr says so rather than looking pooled
+            if self.get("basis") == "grid readout":
+                return f"<noul {self['noul']:.3f} on the grid>"
             return f"<noul {self['noul']:.3f}>"
         if "score" in self:
             return f"<score {self['score']:.2f}/{len(self['legend']) - 1}>"

@@ -5,21 +5,44 @@ does not - an API-only install never touches it.
 """
 from __future__ import annotations
 
+import logging
+import os
 import time
-
-from PIL import ImageOps
 
 import torch
 
 from . import training
+from .store import env
 from .answers import Answer, check_template, normalise_questions
 from .core import Engine
 from .encoders import Encoder
 from .encoders import load as load_encoder
-from .images import Head, as_examples, to_image
+from .images import Head, as_examples, to_image, upright
 from .store import HeadStore, valid_name
 
 __all__ = ["Jev", "load"]
+
+
+_log = logging.getLogger("jevimage")
+
+
+def _embed_batch() -> int:
+    """How many images to put through the encoder at once. `$JEVIMAGE_BATCH` overrides.
+
+    32 fits a 4GB card with a base encoder and leaves room for the questions; anything
+    bigger is a guess about hardware this cannot see, and `_embed_now` halves its way
+    down from here anyway.
+    """
+    raw = env("JEVIMAGE_BATCH")
+    if not raw:
+        return 32
+    try:
+        n = int(raw)
+    except ValueError:
+        raise ValueError(f"$JEVIMAGE_BATCH={raw!r} is not a number of images") from None
+    if n < 1:
+        raise ValueError(f"$JEVIMAGE_BATCH={raw!r} must be at least 1")
+    return n
 
 
 class Jev:
@@ -45,12 +68,43 @@ class Jev:
 
     # -- embedding -------------------------------------------------------
     def _embed_now(self, images):
-        # exif_transpose first: a portrait phone photo carries Orientation=6 and would
-        # otherwise be encoded sideways, so every probability read off it would be the
-        # probability for a rotated image. The server decodes into this same path, so
-        # local and remote stay identical.
-        return self.encoder.img([ImageOps.exif_transpose(to_image(i)).convert("RGB")
-                                 for i in images])
+        """Embed a list in bounded chunks, halving the chunk on an out-of-memory.
+
+        One forward pass over the whole list is what `train()` used to do, and a folder
+        is allowed 4000 images - so a real training set decoded 4000 pictures into
+        memory and asked the GPU for all of them at once. On a 4GB card that is an
+        `OutOfMemoryError` out of `F.linear`, arriving at the caller as HTTP 500.
+
+        The chunk halves rather than being tuned, because the right size depends on the
+        card, the encoder and whatever else holds memory at that moment - none of which
+        this can know beforehand. Starting high and backing off costs one failed pass
+        and then fits, on a 3050 or an A100.
+        """
+        import torch
+
+        batch = list(images)
+        n = _embed_batch()
+        out, i = [], 0
+        while i < len(batch):
+            # exif_transpose first: a portrait phone photo carries Orientation=6 and
+            # would otherwise be encoded sideways, so every probability read off it
+            # would be the probability for a rotated image. The server decodes into
+            # this same path, so local and remote stay identical.
+            chunk = [upright(to_image(x)) for x in batch[i:i + n]]
+            try:
+                out.append(self.encoder.img(chunk))
+            except torch.OutOfMemoryError:
+                if n == 1:
+                    raise
+                n = max(1, n // 2)
+                del chunk
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                _log.warning("out of memory embedding %d images at a time; "
+                             "retrying at %d ($JEVIMAGE_BATCH sets this)", n * 2, n)
+                continue
+            i += n
+        return out[0] if len(out) == 1 else torch.cat(out)
 
     def embed(self, images):
         """Unit embeddings for one image or a list. Returns (n, dim) fp32.
@@ -79,8 +133,25 @@ class Jev:
             raise TypeError(
                 f"ask() takes one image, got a {type(image).__name__} of {len(image)}. "
                 "Loop over them, or call embed() once and ask_embedding() per row.")
-        return self.engine.answer_all(self.embed(image)[0:1],
-                                      normalise_questions(questions), temperature)
+        qs = normalise_questions(questions)
+        patches = None
+        if self.engine.needs_grid(qs):
+            # A grid-read question needs per-patch embeddings, which the pooled path
+            # discards.
+            # Decided before encoding so an ordinary request never pays for this, and
+            # taken instead of embed() so the vision tower still runs exactly once.
+            enc = self.encoder
+            if not hasattr(enc, "grid"):
+                raise ValueError(
+                    f"these options are the same words in a different order, which only "
+                    f"the patch grid can separate, and encoder {enc.name!r} cannot expose "
+                    "one. Use a single transformers encoder (any siglip2-* or clip-* entry "
+                    "in `jevimage encoders`), not an ensemble.")
+            patches = enc.grid([to_image(image)])
+            emb = enc.img([to_image(image)])[0:1]
+        else:
+            emb = self.embed(image)[0:1]
+        return self.engine.answer_all(emb, qs, temperature, patches)
 
     def ask_embedding(self, embedding, questions, *, temperature=None):
         """The same, against an embedding you already have. Skips the encoder entirely."""
@@ -99,8 +170,13 @@ class Jev:
             raise ValueError(f"embedding is {embedding.shape[-1]}-dim, but encoder "
                              f"{self.encoder.name!r} produces {self.encoder.dim}")
         emb = embedding if embedding.ndim == 2 else embedding.unsqueeze(0)
-        return self.engine.answer_all(emb[0:1], normalise_questions(questions),
-                                      temperature)
+        qs = normalise_questions(questions)
+        if self.engine.needs_grid(qs):
+            raise ValueError(
+                "these options are the same words in a different order, so telling them "
+                "apart needs where things are in the picture, which a stored embedding no "
+                "longer records. Call ask() with the image instead.")
+        return self.engine.answer_all(emb[0:1], qs, temperature)
 
     # -- training --------------------------------------------------------
     def train(self, name, data, *, epochs=500, max_per_class=None, template=None) -> Head:

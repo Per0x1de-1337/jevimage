@@ -1,6 +1,6 @@
 ---
 title: "Question types"
-description: "choice, score, noul and head - the exact request shape, answer shape and failure modes of each."
+description: "choice, score, noul and head - the exact request shape, answer shape and failure modes of each, plus the grid readout that choice and noul switch to on their own."
 ---
 
 A question is a JSON object. You send one image and up to 64 of them; you get back one
@@ -17,6 +17,10 @@ There are four types.
 | `head` | the name of a head you trained | the winner, a distribution over your trained classes, a confidence | the encoder that fitted the head |
 
 `noul` is "no-or-yes level": the one number between no and yes.
+
+`choice` and `noul` each have two readouts and you do not choose between them: when the
+options you give are the same words in a different order, they are read off the patch grid
+instead of the pooled vector. See [the grid readout](#the-grid-readout-same-words-different-order).
 
 ## How the examples here were run
 
@@ -65,7 +69,7 @@ img = "ds/red/0.png"
 
 `ds/` is the 12-image fixture these pages share: flat 64x64 squares, `ds/red/0..5.png`
 and `ds/blue/0..5.png`. Write it next to `toy.py` with
-[`examples/make_fixtures.py`](https://github.com/jevimage/jevimage/blob/main/examples/make_fixtures.py) before running anything
+[`examples/make_fixtures.py`](https://github.com/Per0x1de-1337/jevimage/blob/main/examples/make_fixtures.py) before running anything
 below. The toy hashes the image's raw pixels, so the numbers on this page are a function
 of those exact squares - point `img` at a photo of your own and every shape stays the
 same while every number moves.
@@ -85,10 +89,10 @@ same while every number moves.
 | field | required | default | meaning |
 |-------|----------|---------|---------|
 | `type` | no | `"choice"` | which of the four. Case-insensitive. |
-| `criteria` | for `choice`, `score`, and the `noul` pair form | — | the options, levels or captions. Shape depends on `type`. |
+| `criteria` | for `choice`, `score`, and the `noul` pair form | none | the options, levels or captions. Shape depends on `type`. |
 | `prompt` | no | `"{}"` | a template each caption is substituted into. Must substitute exactly one `{}`: a template that cannot vary per option is refused. |
 | `instructions` | only for single-caption `noul` | `""` | the caption for the sigmoid form. Also names a head if `head` is absent. **Ignored by `choice` and `score`.** `instruction` is accepted as a spelling of the same key. |
-| `head` | for `head` | — | which trained head to run. `name` is accepted as a spelling of the same key. |
+| `head` | for `head` | none | which trained head to run. `name` is accepted as a spelling of the same key. |
 
 `instructions` on a `choice` or a `score` is silently dead weight; it is read but never
 used, so a question phrased as instructions plus bare labels will not do what it looks
@@ -266,7 +270,7 @@ print(json.dumps(a["crowd"], indent=2))
 | field | type | meaning |
 |-------|------|---------|
 | `type` | str | `"score"` |
-| `score` | float | `sum(i * p_i)` — the expected level index, in `0 .. len(criteria)-1`, rounded to 4 dp |
+| `score` | float | `sum(i * p_i)` - the expected level index, in `0 .. len(criteria)-1`, rounded to 4 dp |
 | `probabilities` | `{str(index): float}` | keys are level **indices as strings**, not your captions |
 | `legend` | `{str(index): str}` | index → the caption you gave. Keep it: the probabilities are unreadable without it |
 | `confidence` | float | peakedness of the distribution, same scale as `choice` |
@@ -420,7 +424,7 @@ and so does `instructions` if neither is present, a leftover convenience rather 
 shape to write.
 
 There is no `criteria`, no `prompt`: the classes and their meanings are in the head
-file, fixed when you trained it. See [training.md](/docs/training).
+file, fixed when you trained it. See [training.md](training.md).
 
 ```python
 head = jev.train("colour", "ds/")            # ds/red/*.png, ds/blue/*.png
@@ -474,7 +478,7 @@ dimensionality produce embeddings in unrelated spaces and the answer would be si
 wrong rather than loudly broken.
 
 **Choosing a threshold.** Use `confidence`, as with `choice`, but calibrate it against
-`accuracy` and `per_class` from [`compare()`](/docs/training) rather than against intuition.
+`accuracy` and `per_class` from [`compare()`](training.md) rather than against intuition.
 A head trained on 12 examples is a suggestion; a head with 200 per class and 0.95
 held-out is a decision.
 
@@ -704,7 +708,7 @@ Where it applies:
 | set on | applies to |
 |--------|------------|
 | `load(temperature=...)` | `choice`, `score`, `noul` pair. **Not** `head` (heads use 1.0), **not** the `noul` sigmoid. |
-| `ask(..., temperature=...)` | the same three, **and** `head` — a per-call temperature overrides the head's 1.0. |
+| `ask(..., temperature=...)` | the same three, **and** `head` - a per-call temperature overrides the head's 1.0. |
 | neither | the encoder's `1 / logit_scale`, or `0.01` |
 
 That split surprises people, so here it is measured on the `colour` head above:
@@ -773,11 +777,11 @@ third exception: it is a 404, with the heads directory stripped out of the sente
 
 ## From the CLI
 
-`jev ask` builds these questions from flags; each flag repeats, and all of them ride the
+`jevimage ask` builds these questions from flags; each flag repeats, and all of them ride the
 one encode.
 
 ```bash
-JEV_URL=http://127.0.0.1:8123 jev ask ds/red/0.png \
+JEVIMAGE_URL=http://127.0.0.1:8123 jevimage ask ds/red/0.png \
   --choice indoor="an indoor scene" outdoor="an outdoor scene" \
   --score "an empty street,a busy street,a packed crowd" \
   --noul "a blurry photo" "a sharp photo"
@@ -805,6 +809,201 @@ its id. The CLI covers the common shapes only; `prompt` templates, nested criter
 per-call temperature are Python and HTTP.
 
 ---
+
+## The grid readout: same words, different order
+
+`choice` and `noul` read one vector for the whole image. That vector records what is in the
+picture and loses the arrangement, which is why it can tell you a helmet is present and not
+whether the helmet is on anybody's head.
+
+When the options you give are **the same words in a different order**, what is present cannot
+separate them at all -- both readings contain a helmet and a head. So `choice` and `noul` stop
+reading the pooled vector and read the patch grid instead. The encoder computes 196 patch
+vectors on the way to the pooled one and throws them away; this asks each part of your caption
+which patch it belongs to, then compares your options on that. Same forward pass, same 196
+patches, nothing trained.
+
+**There is no type for this and no flag.** It is decided from your `criteria`, because your
+criteria are what make it necessary. You keep the answer shape you asked for.
+
+```bash
+jevimage ask shelf.jpg \
+  --noul "a black camera beside a green plant" \
+         "a green camera beside a black plant"
+```
+
+```
+noul  [noul]  0.828   (grid readout, confidence 0.452)
+```
+
+```python
+jev.ask(img, {"colours": {"type": "noul", "criteria": {
+    "true":  "a black camera beside a green plant",
+    "false": "a green camera beside a black plant"}}})
+```
+```
+{"type": "noul", "noul": 0.828, "basis": "grid readout", "confidence": 0.452}
+```
+
+The same binding as a `choice` routes the same way and answers as a `choice`:
+
+```python
+jev.ask(img, {"colours": {"type": "choice", "criteria": {
+    "camera_black": "a black camera beside a green plant",
+    "plant_black":  "a green camera beside a black plant"}}})
+```
+```
+{"type": "choice", "readout": "grid", "choice": "camera_black",
+ "probabilities": {...}, "confidence": 0.452}
+```
+
+### How to tell which readout ran
+
+| type | field | value |
+|------|-------|-------|
+| `noul` | `basis` | `grid readout` instead of `contrast pair` |
+| `choice` | `readout` | `grid`; the key is absent on a pooled choice |
+
+`score` never routes here. An ordinal rubric's levels differ in which words they contain --
+"empty", "busy", "packed" -- so they are never a rearrangement of each other.
+
+**Read the confidence relatively.** A grid-read answer runs lower than a pooled one, because
+the grid scores sit in a narrower range. On a real photo, a binding question spread 0.0149
+and reported confidence 0.452, while a relation question the readout genuinely could not
+decide spread 0.0036 and reported 0.086. That flatness is a true report: rescaling the scores
+to a unit spread turned the undecided case into 0.551 confidence on the **wrong** option, so
+the scores are deliberately left unscaled. (The mass over the grid *is* standardised, because
+a location always has an answer and only its sharpness was mis-scaled.)
+
+### When it fires
+
+Exactly when the options are word-rearrangements of each other, ignoring articles and other
+stopwords, and never when two options are identical. That test is the whole routing decision
+and it needs no image, so it happens in the planner before anything is encoded.
+
+Measured over 2933 BiVLC instances it fires on 249, of which 248 are genuine swaps:
+precision 0.996, nothing fitted.
+
+It is deliberately narrow, because the grid is **worse** on presence questions -- it can find
+some region that weakly matches almost any noun. Measured on SugarCrepe `replace_obj`, where
+the wrong caption swaps in a different object: the pooled vector scores 92.01 and the grid
+75.24. On `swap_att`, where the wrong caption is the same words rearranged, the pooled vector
+scores 54.80 -- below chance -- and the grid 70.42. Each readout is used where it wins.
+
+Measured on BiVLC `swap` (359 real photos whose negative caption has the same words in a
+different order, so a bag-of-words reading is at chance):
+
+On the task this library performs -- one image, two captions -- the pooled reading wins,
+measured on SugarCrepe swap (n=911) against a whole-caption baseline: pooled **70.25**,
+this routing 68.50. The larger figures once reported for this readout came from the
+two-image benchmark protocol and from a baseline that scored a caption as the mean of its
+segment embeddings, about 18 points weaker than encoding the caption. The readout is
+therefore **off by default**; set `JEVIMAGE_GRID=1` to try it.
+
+On controlled two-object images where the captions differ only in the relation, the pooled
+vector scores 0.525 on left/right and 0.470 on above/below - chance is 0.500 - and the grid
+scores 1.000 on both.
+
+**Attribute binding is the strong half; relation wording is the weak half.** Asking which
+property belongs to which object works well:
+
+```
+"a black camera beside a green plant"  vs  "a green camera beside a black plant"
+     grid 0.824      pooled 0.566   (a coin flip)
+```
+
+Asking about left/right or above/below on a cluttered photo is much weaker -- on that same
+image "the plant is to the left of the camera" scores 0.466, below chance. On controlled
+images with two separated objects the same question is exact, so the limit is clutter and
+scale, not the idea. Measured on VSR, a spatial-reasoning benchmark of real photographs:
+left/right goes from 0.46 to 0.77, while "on" and "under" do not improve, because in a real
+photograph those usually mean physical support rather than a position in the frame.
+
+Note what this means for a pair that differs in **which** words it contains, like
+`"the plant is in a terracotta pot"` against `"the plant is in a black pot"`. That is a
+presence question, it reads pooled, and on one measured photo pooled got it confidently wrong
+(0.104) where the grid would have got it right (0.970). The router is tuned for the case that
+is common and decidable from the text alone; a pair like that is neither, and guessing at it
+would cost more on ordinary classification than it wins here.
+
+### Never write a negation
+
+This is the mistake that produces a confident-looking number with nothing behind it.
+
+```
+"the girl is wearing pink dress"  vs  "the girl is not wearing pink dress"
+```
+
+That is not two alternatives. It is one caption with a word inserted, and dual encoders do not
+represent "not": measured on a real photo those two captions are **0.927** similar to each
+other, where two genuine alternatives sit at 0.83-0.85. There is nothing to separate, so the
+answer is noise -- 0.652 on a photo where the dress is plainly white.
+
+Name the **alternative** instead, never the absence:
+
+```
+"the girl is wearing a pink dress"  vs  "the girl is wearing a white dress"
+     -> 0.095, correctly saying she is not in pink
+```
+
+Inserting "not" changes which words are present, so a negation pair is **not** a
+rearrangement and reads pooled. That is exactly where the warning matters, because nothing
+else about a `contrast pair` answer tells you the number is noise -- so every `noul` pair
+carries a `warning` when it is unanswerable, whichever readout ran. It fires on two cases:
+
+| case | what it says |
+|------|--------------|
+| the captions differ only by a negation word | dual encoders do not represent "not"; give two real alternatives |
+| the captions are more than 0.90 similar | there is little to separate; differ in what they claim, not in wording |
+
+The warning belongs to the pooled path. A rearrangement has the same words on both sides, so
+it is near-identical to its swap by construction -- 0.975 measured on a controlled two-object
+image -- and running the 0.90 similarity check on the grid path would fire on essentially
+every question the readout exists for. High pooled similarity is the *precondition* for
+reading the grid, not a reason to distrust it, so a grid-read answer always reports
+`confidence` and never a warning.
+
+### Requirements
+
+The grid readout needs one transformers encoder so there is a patch grid to read. An ensemble
+(`a+b`) has no single grid, and since the pooled vector is at chance on exactly this question,
+the call is refused by name rather than quietly answering from it:
+
+```
+jevimage: these options are the same words in a different order, which only the patch grid
+can separate, and encoder 'siglip2-base-224+dfn5b-h-14-384' cannot expose one. Use a single
+transformers encoder (any siglip2-* or clip-* entry in `jevimage encoders`), not an ensemble.
+```
+
+It also needs the image itself. `ask_embedding` refuses it, because a stored embedding no
+longer records where anything was:
+
+```
+jevimage: these options are the same words in a different order, so telling them apart needs
+where things are in the picture, which a stored embedding no longer records. Call ask() with
+the image instead.
+```
+
+Both are decided before the image is encoded, so a request that cannot be answered this way
+fails without paying for a forward pass.
+
+### How it works
+
+The pooled vector is `out_proj(sum_i a_i * V x_i)` plus the pooling head's tail. Dropping
+the attention weights `a_i` and keeping `V x_i` for each patch gives that patch's own
+contribution, in the space the text already lives in.
+
+Reading `last_hidden_state` directly does not work. Measured on 96 controlled images with
+one object on a textured background, asking which patch a phrase peaks on:
+
+| readout | correct patch | centroid error |
+|---------|---------------|----------------|
+| raw `last_hidden_state` | 12.5% | 2.68 patches |
+| the value projection | **100%** | **0.43 patches** |
+
+A random guess averages 5.3 patches of error, so the raw tokens are barely above noise.
+That is why patch tokens have a reputation for being unusable.
+
 
 ## Errors a malformed question can raise
 
@@ -855,9 +1054,9 @@ downstream.
 
 ---
 
-See also: [encoders.md](/docs/encoders) for what to ask these questions of, and
-[training.md](/docs/training) for where `head` questions come from.
+See also: [encoders.md](encoders.md) for what to ask these questions of, and
+[training.md](training.md) for where `head` questions come from.
 
 ---
 
-[← Quickstart](/docs/quickstart) · [Docs index](/docs/index) · [Training a head →](/docs/training)
+[← Quickstart](quickstart.md) · [Docs index](index.md) · [Training a head →](training.md)

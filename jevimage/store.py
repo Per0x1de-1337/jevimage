@@ -7,7 +7,7 @@ heads never contend for one file.
 
     ~/.jev/heads/street_objects.pt
 
-Default directory: $JEV_HOME/heads, else ~/.jev/heads.
+Default directory: $JEVIMAGE_HOME/heads, else ~/.jev/heads.
 """
 from __future__ import annotations
 
@@ -16,6 +16,21 @@ import re
 import threading
 import uuid
 from pathlib import Path
+
+def env(name: str, default=None):
+    """Read a setting, preferring JEVIMAGE_ and falling back to the old JEV_ name.
+
+    The variables were renamed to match the package. Dropping the old names would have
+    broken every machine that already exported them, including this project's own
+    systemd units, so both are read and the new one wins. `JEV_` is not deprecated
+    loudly anywhere: it simply keeps working.
+    """
+    short = name[len("JEVIMAGE_"):] if name.startswith("JEVIMAGE_") else name
+    v = os.environ.get("JEVIMAGE_" + short)
+    if v is None:
+        v = os.environ.get("JEV_" + short)
+    return default if v is None else v
+
 
 # torch is imported inside the methods that read and write files, not here, so that
 # `valid_name` is usable from the HTTP client - an API-only install has no torch and
@@ -27,8 +42,8 @@ _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 
 
 def default_dir() -> Path:
-    home = Path(os.environ.get("JEV_HOME") or Path.home() / ".jev")
-    return Path(os.environ.get("JEV_HEADS_DIR") or home / "heads")
+    home = Path(env("JEVIMAGE_HOME") or Path.home() / ".jev")
+    return Path(env("JEVIMAGE_HEADS_DIR") or home / "heads")
 
 
 def valid_name(name: str) -> str:

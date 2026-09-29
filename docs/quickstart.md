@@ -5,7 +5,7 @@ description: "From nothing to a working answer, twice: running the models yourse
 
 Ten minutes, from an empty environment to a calibrated answer and a trained head.
 Everything here is shown twice: once with `jevimage.load()`, which runs the encoder in
-your process, and once with `jevimage.connect(url)`, which calls a `jev serve` instance
+your process, and once with `jevimage.connect(url)`, which calls a `jevimage serve` instance
 over HTTP. The two have the same method names and return the same objects, so the
 choice is one line in your code.
 
@@ -20,17 +20,55 @@ under a real encoder, it says so.
 ```bash
 pip install jevimage              # API-only: pillow + stdlib. No torch, no weights.
 pip install 'jevimage[local]'     # + torch, transformers. load() runs the encoder here.
-pip install 'jevimage[serve]'     # + fastapi, uvicorn. `jev serve` hosts it.
+pip install 'jevimage[serve]'     # + fastapi, uvicorn. `jevimage serve` hosts it.
 ```
 
-**Not on PyPI yet.** Until it is, those three lines mean the equivalent against a clone:
-`git clone <repo> && cd jevimage-oss`, then `pip install .`, `pip install '.[local]'`,
-`pip install '.[serve]'`. See [Install](/docs/install#from-source).
+`jevimage doctor` says which of those three this machine has, and prints the command
+for anything missing. To install from a clone instead, see
+[Install](install.md#from-source).
 
 The base install is the whole client. `jevimage.connect(url)` works fully under it,
-including `train()`, and so does `jev ask/train/heads/rm --url`. What it cannot do is
+including `train()`, and so does `jevimage ask/train/heads/rm --url`. What it cannot do is
 run a model: `jevimage.load()` raises an `ImportError` that names the fix. See
 [When it goes wrong](#when-it-goes-wrong).
+
+## Point it at something
+
+Nothing works until the CLI knows where the model is, and there are exactly two answers.
+Typing `jevimage` on its own tells you which one you are on:
+
+**Someone else's server.** Sign in once, and every shell uses it - no torch on your
+machine:
+
+```bash
+jevimage login                    # key from console.jevimage.org
+```
+
+Or set it per shell, which beats the saved one:
+
+```bash
+export JEVIMAGE_API_KEY=...            # this alone selects the hosted API
+export JEVIMAGE_URL=...                # only if it is not api.jevimage.org
+```
+
+**Your own.** One command, no key, and `ask` finds it by itself:
+
+```bash
+pip install 'jevimage[serve]'
+jevimage serve                    # listens on 127.0.0.1:8731
+```
+
+Having a key is what selects the hosted API - saved by `login` or exported in this
+shell. A key is only good against the service that issued it, so holding one is the same
+as choosing it. Without a key, `ask`,
+`train` and `heads` look for a `jevimage serve` on `127.0.0.1:8731-8740` and use it
+without being told. Neither, and they load the encoder into your own process - correct,
+and about twelve seconds every time.
+
+`--local` overrides all of it and means **this machine**: the server running here if
+there is one, otherwise this process. `--url` names a specific server and beats
+everything. `jevimage doctor` reports which of them you are actually on, and
+`jevimage` on its own says it in one line.
 
 There is a fourth extra, `'jevimage[openclip]'`, needed only for the `dfn5b-h-14-384`
 registry entry; those weights are Apple-licensed, which is why they are opt-in.
@@ -38,11 +76,11 @@ registry entry; those weights are Apple-licensed, which is why they are opt-in.
 ## Ask one image a question
 
 A question is a dict: a `type` and some `criteria`. `criteria` for a `choice` maps your
-label to a *caption* — dual encoders were trained on captions, not questions, so
+label to a *caption* - dual encoders were trained on captions, not questions, so
 "an indoor scene" reads better than "is it indoors?".
 
 The images below are a 12-square fixture, `ds/red/0..5.png` and `ds/blue/0..5.png`,
-written by [`examples/make_fixtures.py`](https://github.com/jevimage/jevimage/blob/main/examples/make_fixtures.py) - six lines of
+written by [`examples/make_fixtures.py`](https://github.com/Per0x1de-1337/jevimage/blob/main/examples/make_fixtures.py) - six lines of
 Pillow, no download:
 
 ```python
@@ -81,7 +119,7 @@ print(a["colour"].choice, a["colour"].probabilities["red"], a["colour"].confiden
 red 1.0 0.999999
 ```
 
-(The line actually run was `jevimage.load(Toy(), heads_dir="qs_heads")` — the toy
+(The line actually run was `jevimage.load(Toy(), heads_dir="qs_heads")` - the toy
 encoder standing in for SigLIP, at its default temperature. A real encoder will not
 report 1.0 on a question like this; it would be somewhere short of certain.)
 
@@ -107,7 +145,7 @@ print(jev.health())
 
 ```
 <choice 'red' p=1.000>
-{'encoder': 'toy', 'dim': 16, 'device': 'cpu', 'primitives': ['choice', 'score', 'noul', 'head'], 'heads': 0, 'auth': 'open', 'version': '0.1.0'}
+{'encoder': 'toy', 'dim': 16, 'device': 'cpu', 'primitives': ['choice', 'score', 'noul', 'head'], 'heads': 0, 'auth': 'open', 'version': '0.2.0'}
 ```
 
 Identical to the local answer above here, digit for digit. The same engine, on the other
@@ -121,14 +159,14 @@ digit for digit, and probabilities are rounded to 6 decimals before you see them
 two sides are not promised to be bit-identical: captions are encoded in whatever batch a
 request happens to need, float reductions are not associative, and a GPU encoder runs
 bf16 while a CPU one runs fp32. Compare with a tolerance rather than `==`, and pin
-`JEV_DEVICE=cpu` on both sides if you need the same digits every time.
+`JEVIMAGE_DEVICE=cpu` on both sides if you need the same digits every time.
 
-To start the server yourself: `pip install 'jevimage[serve]'` then `jev serve`
+To start the server yourself: `pip install 'jevimage[serve]'` then `jevimage serve`
 (`--host`, `--port`, `--encoder`, `--api-key`). The same thing from the CLI, against
 the same server:
 
 ```bash
-jev ask ds/red/0.png --choice red="a red square" blue="a blue square" --url http://127.0.0.1:8123
+jevimage ask ds/red/0.png --choice red="a red square" blue="a blue square" --url http://127.0.0.1:8123
 ```
 
 ```
@@ -139,7 +177,7 @@ choice  [choice]  red   confidence 1.000
     blue   0.000
 ```
 
-`--url` is also `$JEV_URL`, with `$JEV_API_KEY` for the key. Without either, `jev ask`
+`--url` is also `$JEVIMAGE_URL`, with `$JEVIMAGE_API_KEY` for the key. Without either, `jevimage ask`
 loads a local encoder.
 
 ## What an answer is
@@ -262,8 +300,7 @@ print(json.dumps(head.comparison, indent=2))
 }
 ```
 
-`accuracy` is stratified k-fold held-out accuracy, with k = min(5, thinnest class) —
-never the accuracy on the images it was fitted to. With 6 examples per class that number
+`accuracy` is stratified k-fold held-out accuracy, with k = min(5, thinnest class) - never the accuracy on the images it was fitted to. With 6 examples per class that number
 is worth very little, and the toy encoder makes it worth nothing at all; read it next to
 `n` and `counts` before believing it. A class with fewer than two examples is refused
 outright, so k is always at least 2 and a head `train()` returns always carries a number
@@ -300,9 +337,9 @@ print(json.dumps(a["c"], indent=2))
 The answer carries `trained_on` and `accuracy`, so a downstream consumer can see how
 much evidence is behind the number it is reading.
 
-Locally, heads are files under `$JEV_HEADS_DIR`, else `$JEV_HOME/heads`, else
+Locally, heads are files under `$JEVIMAGE_HEADS_DIR`, else `$JEVIMAGE_HOME/heads`, else
 `~/.jev/heads` (one file per head, so a head can be copied or committed on its own);
-`jevimage.load(..., heads_dir=...)` overrides it. `jev heads` lists them, `jev rm NAME`
+`jevimage.load(..., heads_dir=...)` overrides it. `jevimage heads` lists them, `jevimage rm NAME`
 deletes one.
 
 ### The same training, through a server
@@ -349,7 +386,7 @@ To use a server instead - no torch required - call jevimage.connect(url).
 (underlying import error: No module named 'torch')
 ```
 
-`jev encoders` still works there (it lists the registry without loading anything), and
+`jevimage encoders` still works there (it lists the registry without loading anything), and
 so does every `--url` command.
 
 **Single-caption `noul` on an encoder with no calibration.**
@@ -373,8 +410,8 @@ ValueError: head 'colours' was trained on encoder 'toy' but this instance runs
 actual call is where you find out:
 
 ```
-JevError: cannot reach jev at http://127.0.0.1:8199 ([Errno 111] Connection refused).
-Start one with `jev serve`, or pass the URL it is actually listening on.
+JevError: cannot reach a jevimage server at http://127.0.0.1:8199 ([Errno 111] Connection refused).
+Start one with `jevimage serve`, or pass the URL it is actually listening on.
 ```
 
 `JevError` subclasses `ValueError`, deliberately: a local `Jev` raises `ValueError` for
@@ -385,14 +422,14 @@ line becomes a `connect()` line. It carries `.status` (the HTTP code) and `.deta
 ## Where to go next
 
 - The four question types in full, including the shape of every answer and both `noul`
-  forms: [Question types](/docs/questions).
+  forms: [Question types](questions.md).
 - Choosing an encoder, joining two with `+`, or registering your own object with
-  `.name` / `.dim` / `.img()` / `.txt()`: [Choosing an encoder](/docs/encoders).
-- Serving: `jev serve`, API keys and deployment shapes in [Serving](/docs/serving); the
-  wire contract route by route in [the HTTP reference](/docs/reference-http).
-- Runnable versions of everything above: [`examples/quickstart.py`](https://github.com/jevimage/jevimage/blob/main/examples/quickstart.py)
-  and [`examples/train_your_own.py`](https://github.com/jevimage/jevimage/blob/main/examples/train_your_own.py).
+  `.name` / `.dim` / `.img()` / `.txt()`: [Choosing an encoder](encoders.md).
+- Serving: `jevimage serve`, API keys and deployment shapes in [Serving](serving.md); the
+  wire contract route by route in [the HTTP reference](reference-http.md).
+- Runnable versions of everything above: [`examples/quickstart.py`](https://github.com/Per0x1de-1337/jevimage/blob/main/examples/quickstart.py)
+  and [`examples/train_your_own.py`](https://github.com/Per0x1de-1337/jevimage/blob/main/examples/train_your_own.py).
 
 ---
 
-[← Install](/docs/install) · [Docs index](/docs/index) · [Question types →](/docs/questions)
+[← Install](install.md) · [Docs index](index.md) · [Question types →](questions.md)

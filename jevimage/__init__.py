@@ -34,7 +34,7 @@ against one and switch later by changing that line.
 HOST IT FOR OTHERS:
 
     pip install 'jevimage[serve]'
-    jev serve --host 0.0.0.0 --port 8000
+    jevimage serve --host 0.0.0.0 --port 8731
 
 Zero-shot not good enough? Train a head on your own labelled images. The encoder stays
 frozen, so this takes about a second and costs nothing at query time - and it works the
@@ -46,7 +46,7 @@ same locally or through a server:
 """
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.1.20"
 
 # Only the light things are imported eagerly. torch and transformers live behind
 # __getattr__ below, so `import jevimage` costs milliseconds and an API-only install
@@ -104,7 +104,7 @@ def __dir__():
 
 def connect(url: str, *, api_key: str | None = None, timeout: float = 60.0,
             max_edge: int | None = 384):
-    """Talk to a `jev serve` instance. Same methods as `load()`, over HTTP.
+    """Talk to a `jevimage serve` instance. Same methods as `load()`, over HTTP.
 
     Needs no torch and downloads no weights, so this is the whole dependency footprint
     of an API-only install.

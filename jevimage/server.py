@@ -1,7 +1,7 @@
 """The framework over HTTP - the same names, the same shapes, no new concepts.
 
     $ pip install 'jevimage[serve]'
-    $ JEV_ENCODER=siglip2-base-224 uvicorn jevimage.server:app
+    $ JEVIMAGE_ENCODER=siglip2-base-224 uvicorn jevimage.server:app
 
 Every route under /v1 mirrors one method on `jevimage.Jev`, so the SDK docs are the
 HTTP docs: /v1/ask is ask(), /v1/embed is embed(), /v1/heads is train/list/delete. A
@@ -27,7 +27,9 @@ from PIL import Image
 from pydantic import BaseModel, Field
 
 import jevimage
+from .answers import normalise_questions
 from . import store, training
+from .store import env
 
 __all__ = ["build_app", "app"]
 
@@ -162,20 +164,20 @@ def _guard(keys: list[str]):
         raw = sent.encode("latin-1", "replace")
         if not any(hmac.compare_digest(raw, k.encode("utf-8")) for k in keys):
             raise HTTPException(401, "send 'Authorization: Bearer <key>' with a key this "
-                                     "server was started with (JEV_API_KEYS)")
+                                     "server was started with (JEVIMAGE_API_KEYS)")
     return check
 
 
 def build_app(jev=None, *, api_keys=None) -> FastAPI:
-    """The app. `jev` defaults to `jevimage.load()`, which reads JEV_ENCODER and
-    JEV_HEADS_DIR itself, so there is no second place that parses those."""
+    """The app. `jev` defaults to `jevimage.load()`, which reads JEVIMAGE_ENCODER and
+    JEVIMAGE_HEADS_DIR itself, so there is no second place that parses those."""
     if jev is None:
         jev = jevimage.load(batch=True)      # a server is exactly what the batcher is for
     if api_keys is None:
         # commas or whitespace: the CLI spells it `--api-key K1 K2`, so a unit file that
         # mirrors that spelling must not end up with one key containing a space
-        api_keys = os.environ.get("JEV_API_KEYS", "").replace(",", " ").split()
-    # an empty string is not a key: api_keys=[os.environ.get("JEV_KEY", "")] on a host
+        api_keys = env("JEVIMAGE_API_KEYS", "").replace(",", " ").split()
+    # an empty string is not a key: api_keys=[env("JEVIMAGE_KEY", "")] on a host
     # where the variable is unset would otherwise build a guard that accepts a missing
     # header (compare_digest(b"", b"") is true) while /v1/health reports "bearer"
     api_keys = [k for k in (api_keys or []) if k]
@@ -212,11 +214,19 @@ def build_app(jev=None, *, api_keys=None) -> FastAPI:
     def ask(body: AskIn):
         t0 = time.perf_counter()
         ims = _images(body.image, body.images)
-        embs = jev.embed(ims)
-        embed_ms = (time.perf_counter() - t0) * 1000
-        # one encode, then every question read against it - the whole point of the engine
-        out = [jev.ask_embedding(e, body.questions, temperature=body.temperature)
-               for e in embs]
+        qs = normalise_questions(body.questions)
+        if jev.engine.needs_grid(qs):
+            # A grid-read question needs the patch grid, which an embedding no longer
+            # records, so
+            # these go through ask() per image. Still one vision pass each - the grid and
+            # the pooled vector come out of the same forward.
+            out = [jev.ask(im, qs, temperature=body.temperature) for im in ims]
+            embed_ms = (time.perf_counter() - t0) * 1000
+        else:
+            embs = jev.embed(ims)
+            embed_ms = (time.perf_counter() - t0) * 1000
+            # one encode, then every question read against it - the point of the engine
+            out = [jev.ask_embedding(e, qs, temperature=body.temperature) for e in embs]
         return {"answers": out[0] if body.image is not None else out,
                 "timing": {"embed_ms": round(embed_ms, 1),
                            "total_ms": round((time.perf_counter() - t0) * 1000, 1)}}

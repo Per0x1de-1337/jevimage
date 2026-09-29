@@ -43,6 +43,32 @@ class Toy(jevimage.Encoder):
         return self._e(list(ts))
 
 
+class ToyGrid(Toy):
+    """Toy plus a patch grid, so the grid readout is testable without downloading weights.
+
+    The grid is built so that each quadrant's patches encode a known phrase: quadrant 0
+    holds "red circle", quadrant 1 "blue square", and so on. That makes both the readout
+    and the reported coordinates checkable against a truth the test writes itself.
+    """
+
+    name = "toy-grid"
+    grid_side = 4
+    QUADRANTS = ["red circle", "blue square", "green triangle", "yellow star"]
+
+    def grid(self, images):
+        side = self.grid_side
+        half = side // 2
+        rows = []
+        for _ in images:
+            g = torch.zeros(side * side, self.dim)
+            for r in range(side):
+                for c in range(side):
+                    q = (0 if r < half else 2) + (0 if c < half else 1)
+                    g[r * side + c] = self.txt([self.QUADRANTS[q]])[0]
+            rows.append(g)
+        return torch.stack(rows)
+
+
 class ToyCalibrated(Toy):
     """Same width and same space, different name, plus a sigmoid calibration.
 
@@ -57,6 +83,11 @@ class ToyCalibrated(Toy):
 @pytest.fixture
 def toy():
     return Toy()
+
+
+@pytest.fixture
+def toy_grid():
+    return ToyGrid()
 
 
 @pytest.fixture

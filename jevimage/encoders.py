@@ -14,6 +14,16 @@ Leave them off entirely and the engine reads them as absent:
     .logit_scale       float, multiplies the cosine before the sigmoid
     .logit_bias        float, shifts it
 
+One more optional extra lets `choice` and `noul` read WHERE things are, not just what is
+present, for the options only a grid can separate:
+
+    .grid(list[PIL])   -> (n, patches, dim) fp32, L2-normalised, one row per patch
+    .grid_side         int, patches per side (14 for a 16px patch at 224)
+
+Only a transformers ViT can provide it, so `Ensemble` and `OpenCLIP` leave it off and a
+question that needs it refuses rather than degrading to a pooled answer that would be at
+chance (see core.Engine.grid_read).
+
 SigLIP provides both because it was trained with a pairwise sigmoid loss. CLIP-family
 models have a scale but no bias, and the framework degrades honestly rather than
 inventing one (see core.noul).
@@ -32,28 +42,168 @@ or bring your own:
 from __future__ import annotations
 
 # torch is imported inside the functions that use it, not here, so that `available()`
-# and `jev encoders` work in an API-only install - seeing which encoders exist should
+# and `jevimage encoders` work in an API-only install - seeing which encoders exist should
 # not require the stack that runs them.
 
+import logging
 import os
 from collections.abc import Callable
 
-__all__ = ["load", "register", "available", "Encoder", "HFCLIP", "OpenCLIP", "Ensemble",
-           "unit", "resolve_device", "resolve_dtype"]
+from .store import env
+
+__all__ = ["load", "register", "available", "check", "Encoder", "HFCLIP", "OpenCLIP", "Ensemble",
+           "unit", "resolve_device", "resolve_dtype", "fast_cores", "tune_cpu_threads"]
+
+
+_log = logging.getLogger("jevimage.encoders")
+
+
+_TUNED = False
+
+
+def fast_cores() -> int | None:
+    """Physical performance cores on this machine, or None if they are all the same.
+
+    Not a guess about topology: Linux publishes the hybrid split itself, under
+    `/sys/devices/cpu_core` and `/sys/devices/cpu_atom`. Anywhere it does not - a
+    uniform CPU, or not Linux - this returns None and nothing is changed.
+    """
+    try:
+        if not os.path.isdir("/sys/devices/cpu_atom"):
+            return None                 # uniform: torch's own default is right
+        spec = open("/sys/devices/cpu_core/cpus").read().strip()
+    except OSError:
+        return None
+
+    logical = set()
+    for part in spec.split(","):
+        lo, _, hi = part.partition("-")
+        try:
+            logical.update(range(int(lo), int(hi or lo) + 1))
+        except ValueError:
+            return None
+    # collapse hyperthread siblings: two threads on one core do not add a core's work
+    cores = set()
+    for c in logical:
+        try:
+            with open(f"/sys/devices/system/cpu/cpu{c}/topology/"
+                      "thread_siblings_list") as f:
+                cores.add(f.read().strip())
+        except OSError:
+            cores.add(str(c))
+    return len(cores) or None
+
+
+def tune_cpu_threads() -> int | None:
+    """Point torch at the fast cores when the two kinds differ. Returns what it set.
+
+    torch defaults to the physical core count, which is wrong on a hybrid chip: every
+    barrier in a forward pass waits on the slowest thread, so four E-cores set the pace
+    for six P-cores as well. Measured on an i7-12650H (6 P + 4 E), one 224px forward:
+
+        threads   1   2   3   4   5   6   8  10*  12   16
+        ms      348 180 141 121 126  95 178 158  158  905     (* torch's default)
+
+    Backing off to the six P-cores is 40% faster than the default and nine times faster
+    than using all sixteen. `$JEVIMAGE_THREADS` sets it by hand, `JEVIMAGE_THREADS=0` turns this
+    off, and an `$OMP_NUM_THREADS` already in the environment is left alone: a process
+    that chose a thread count did so for the whole application, not just for us.
+    """
+    global _TUNED
+    import torch
+
+    if _TUNED:
+        return None
+    _TUNED = True
+
+    want = env("JEVIMAGE_THREADS")
+    if want:
+        try:
+            n = int(want)
+        except ValueError:
+            raise ValueError(f"$JEVIMAGE_THREADS={want!r} is not a number of threads") from None
+        if n <= 0:
+            return None                 # explicitly opted out
+    elif os.environ.get("OMP_NUM_THREADS") or os.environ.get("MKL_NUM_THREADS"):
+        return None                     # already someone else's decision
+    else:
+        n = fast_cores()
+        if not n or n >= torch.get_num_threads():
+            return None                 # nothing to back off to
+
+    torch.set_num_threads(n)
+    _log.info("using %d cpu threads (JEVIMAGE_THREADS=0 to leave torch's default of %d)",
+              n, torch.get_num_threads())
+    return n
+
+
+def check(name: str) -> None:
+    """Refuse a name the registry does not have, without importing torch.
+
+    `load()` needs this too, but only reaches it after transformers is in - so on an
+    API-only install a typo'd `--encoder` answered "this needs torch". You installed
+    torch, ran the same command, and only then learned the name was wrong. The CLI calls
+    this first, and it is the same sentence either way.
+    """
+    for part in (p.strip() for p in str(name).split("+")):
+        if part and part not in REGISTRY:
+            raise KeyError(f"unknown encoder {part!r}. Available: {', '.join(available())}. "
+                           f"Register your own with jevimage.register(name, factory) - "
+                           f"from Python, in the process that will serve it; the `jevimage` "
+                           f"command only sees these built-in names, because it never "
+                           f"imports your code.")
+
+
+def _place_with_fallback(enc, device: str | None) -> None:
+    """Put `enc` on the best device it will actually hold, calling `enc._place()`.
+
+    A GPU that exists is not a GPU with room. On a 4 GB laptop card a second copy of the
+    model raises CUBLAS_STATUS_ALLOC_FAILED deep inside torch, and a classifier that
+    refuses to run because something else is using the card is less useful than one that
+    is slower. So CUDA is a preference: if it will not hold the model, fall back and say
+    so once.
+
+    A device you named - `device=` or `$JEVIMAGE_DEVICE` - is never silently swapped. You may
+    have a reason to want that card and no other, and a job that quietly runs 40x slower
+    is worse than one that stops.
+    """
+    wanted = resolve_device(device)
+    if wanted == "cpu":
+        tune_cpu_threads()
+    try:
+        enc._place(wanted)
+        return
+    except Exception as e:
+        if wanted == "cpu" or device is not None or env("JEVIMAGE_DEVICE"):
+            raise
+        _log.warning("%s could not load on %s (%s); using the CPU instead",
+                     enc.name, wanted, str(e).splitlines()[0][:90])
+    _free_cuda()
+    tune_cpu_threads()
+    enc._place("cpu")
+
+
+def _free_cuda() -> None:
+    """Hand back whatever the failed attempt managed to allocate."""
+    try:
+        import torch
+        torch.cuda.empty_cache()
+    except Exception:
+        pass
 
 
 def resolve_device(device: str | None = None) -> str:
-    """Explicit argument, then $JEV_DEVICE, then CUDA if present, then CPU.
+    """Explicit argument, then $JEVIMAGE_DEVICE, then CUDA if present, then CPU.
 
     A bad value is refused here rather than inside `.to()`, which runs after the weights
     have loaded: a typo'd device is the same kind of user typo as a typo'd encoder name,
     and it should not cost a model download or print a torch traceback.
     """
     import torch
-    dev = device or os.environ.get("JEV_DEVICE")
+    dev = device or env("JEVIMAGE_DEVICE")
     if not dev:
         return "cuda" if torch.cuda.is_available() else "cpu"
-    where = "device" if device else "$JEV_DEVICE"
+    where = "device" if device else "$JEVIMAGE_DEVICE"
     try:
         parsed = torch.device(dev)
     except (RuntimeError, ValueError) as e:
@@ -126,18 +276,26 @@ class HFCLIP(Encoder):
 
         self.model_id = model_id
         self.name = name or model_id
-        self.device = resolve_device(device)
-        self.dtype = resolve_dtype(self.device)
         self.proc = AutoProcessor.from_pretrained(model_id)
-        self.m = AutoModel.from_pretrained(model_id, dtype=self.dtype).to(self.device).eval()
         self.pad = pad
+
+        _place_with_fallback(self, device)
+        self.dim = int(self.txt(["x"]).shape[1])
+
+    def _place(self, device: str) -> None:
+        """Load onto one device. Separate so the CUDA attempt can be retried on CPU."""
+        from transformers import AutoModel
+
+        self.device = device
+        self.dtype = resolve_dtype(device)
+        self.m = AutoModel.from_pretrained(self.model_id,
+                                           dtype=self.dtype).to(device).eval()
         # SigLIP exposes both; CLIP-family exposes scale only. Missing stays None so
         # core.py can tell "not calibrated" from "calibrated to 0".
         self.logit_scale = (self.m.logit_scale.exp().item()
                             if hasattr(self.m, "logit_scale") else None)
         self.logit_bias = (self.m.logit_bias.item()
                            if hasattr(self.m, "logit_bias") else None)
-        self.dim = int(self.txt(["x"]).shape[1])
 
     def img(self, images) -> "torch.Tensor":
         import torch
@@ -146,6 +304,51 @@ class HFCLIP(Encoder):
         with torch.no_grad():
             return unit(self.m.get_image_features(
                 pixel_values=px.to(self.device, self.dtype)))
+
+    def grid(self, images) -> "torch.Tensor":
+        """Per-patch embeddings in the same space the text lives in, one forward pass.
+
+        The pooled vector these models publish is out_proj(sum_i a_i * V x_i) plus the
+        pooling head's tail. Dropping the attention weights a_i and keeping V x_i per
+        patch gives each patch's own contribution in that same space - MaskCLIP's trick,
+        applied to whichever pooling the checkpoint uses.
+
+        Reading last_hidden_state directly instead does NOT work, and not by a little.
+        Measured on 96 controlled images with one object on a textured background, asking
+        which patch a phrase peaks on:
+
+            raw last_hidden_state   12.5% correct, centroid error 2.68 patches
+            this value projection  100.0% correct, centroid error 0.43 patches
+
+        A random guess averages 5.3 patches of error, so the raw tokens are barely above
+        noise. This is why patch tokens have a reputation for being unusable, and why
+        crop-based methods pay 86-270 forward passes to avoid them.
+        """
+        import torch
+        vm = self.m.vision_model
+        while hasattr(vm, "vision_model"):
+            vm = vm.vision_model
+        px = self.proc(images=[i.convert("RGB") for i in images],
+                       return_tensors="pt")["pixel_values"].to(self.device, self.dtype)
+        with torch.no_grad():
+            h = vm(pixel_values=px).last_hidden_state
+            # SigLIP pools with a learned attention probe; CLIP pools a CLS token. Both
+            # expose a value projection - for CLIP it is the last self-attention block.
+            if hasattr(vm, "head") and hasattr(getattr(vm, "head", None), "attention"):
+                att, d = vm.head.attention, h.shape[-1]
+                W, b = att.in_proj_weight, att.in_proj_bias
+                v = att.out_proj(h @ W[2 * d:].T + b[2 * d:])
+                v = v + vm.head.mlp(vm.head.layernorm(v))
+            else:
+                blk = vm.encoder.layers[-1]
+                h = h[:, 1:]                                  # the CLS token is not a patch
+                v = blk.self_attn.out_proj(blk.self_attn.v_proj(h))
+                v = vm.post_layernorm(v + blk.mlp(blk.layer_norm2(v)))
+            proj = getattr(self.m, "visual_projection", None)
+            if proj is not None:                              # CLIP: into the shared space
+                v = proj(v)
+            self.grid_side = int(round(v.shape[1] ** 0.5))
+            return unit(v.reshape(-1, v.shape[-1])).reshape(v.shape[0], v.shape[1], -1)
 
     def txt(self, texts: list[str]) -> "torch.Tensor":
         # SigLIP was trained on fixed-length 64-token captions and degrades measurably
@@ -184,15 +387,22 @@ class OpenCLIP(Encoder):
 
         self.hub_id = hub_id
         self.name = name or hub_id
-        self.device = resolve_device(device)
-        self.dtype = resolve_dtype(self.device)
-        self.m, _, self.pp = open_clip.create_model_and_transforms(f"hf-hub:{hub_id}")
-        self.tok = open_clip.get_tokenizer(f"hf-hub:{hub_id}")
-        self.m = self.m.to(self.device, self.dtype).eval()
+        _place_with_fallback(self, device)
+        self.dim = int(self.txt(["x"]).shape[1])
+
+    def _place(self, device: str) -> None:
+        """Load onto one device. Separate so the CUDA attempt can be retried on CPU."""
+        import open_clip
+
+        self.device = device
+        self.dtype = resolve_dtype(device)
+        self.m, _, self.pp = open_clip.create_model_and_transforms(
+            f"hf-hub:{self.hub_id}")
+        self.tok = open_clip.get_tokenizer(f"hf-hub:{self.hub_id}")
+        self.m = self.m.to(device, self.dtype).eval()
         self.logit_scale = (self.m.logit_scale.exp().item()
                             if hasattr(self.m, "logit_scale") else None)
         self.logit_bias = None      # open_clip contrastive models have no pairwise bias
-        self.dim = int(self.txt(["x"]).shape[1])
 
     def img(self, images) -> "torch.Tensor":
         import torch
@@ -303,7 +513,7 @@ def load(name: str | None = None) -> Encoder:
     Several names joined by '+' build an Ensemble: load("siglip2-base-224+dfn5b-h-14-384").
     Instances are cached per name, so calling this twice loads the weights once.
     """
-    name = name or os.environ.get("JEV_ENCODER") or DEFAULT
+    name = name or env("JEVIMAGE_ENCODER") or DEFAULT
     if name in _LOADED:
         return _LOADED[name]
 
@@ -315,12 +525,7 @@ def load(name: str | None = None) -> Encoder:
                              f"{DEFAULT}+dfn5b-h-14-384")
         enc = Ensemble([load(p) for p in parts], name="+".join(parts))
     else:
-        if name not in REGISTRY:
-            raise KeyError(f"unknown encoder {name!r}. Available: {', '.join(available())}. "
-                           f"Register your own with jevimage.register(name, factory) - "
-                           f"from Python, in the process that will serve it; the `jev` "
-                           f"command only sees these built-in names, because it never "
-                           f"imports your code.")
+        check(name)
         enc = REGISTRY[name]()
         # The registry key is the provenance: a head records this string and is refused
         # under anything else. Letting a factory return its own .name meant load("x")

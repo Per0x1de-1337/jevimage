@@ -21,11 +21,11 @@ jevimage.load(MyEncoder())                        # your own object, no registra
 > **How the examples on this page were run.** Every block below ran against a stand-in
 > encoder over a folder of plain red and blue
 > PNGs (`ds/red/*.png`, `ds/blue/*.png`), the twelve squares
-> [`examples/make_fixtures.py`](https://github.com/jevimage/jevimage/blob/main/examples/make_fixtures.py) writes. The stand-ins are `MeanColour` and `Grey`, both
+> [`examples/make_fixtures.py`](https://github.com/Per0x1de-1337/jevimage/blob/main/examples/make_fixtures.py) writes. The stand-ins are `MeanColour` and `Grey`, both
 > written out in full under [Writing your own encoder](#writing-your-own-encoder)
 > (`Grey` exists only so the ensemble examples have a second member), and `Toy`, a
 > deterministic 16-dimensional hash encoder of the kind the package's own self-tests use
-> (`demo()` in [`jevimage/server.py`](https://github.com/jevimage/jevimage/blob/main/jevimage/server.py)); `ToyCalibrated` is that
+> (`demo()` in [`jevimage/server.py`](https://github.com/Per0x1de-1337/jevimage/blob/main/jevimage/server.py)); `ToyCalibrated` is that
 > same toy with `logit_scale` and `logit_bias` filled in, to exercise the calibrated
 > path. The outputs are real and unedited. They show the plumbing, not SigLIP's accuracy:
 > a 3-dimensional colour space saturates to `p=1.000`, which a real encoder does not. No
@@ -33,12 +33,12 @@ jevimage.load(MyEncoder())                        # your own object, no registra
 
 ## The registry
 
-`jevimage.available()` is the list; `jev encoders` prints it with the current default
+`jevimage.available()` is the list; `jevimage encoders` prints it with the current default
 marked. Both work in an API-only install, because listing encoders should not require the
 stack that runs them:
 
 ```console
-$ jev encoders
+$ jevimage encoders
    clip-vit-l-14
    dfn5b-h-14-384
    metaclip2-huge
@@ -50,21 +50,21 @@ $ jev encoders
 * default (siglip2-base-224). Join names with '+' for an ensemble, e.g. siglip2-base-224+dfn5b-h-14-384.
 ```
 
-Set `$JEV_ENCODER` and the marker follows it. That variable is what `jevimage.load(None)`
+Set `$JEVIMAGE_ENCODER` and the marker follows it. That variable is what `jevimage.load(None)`
 reads, so the listing and the loader cannot disagree:
 
 ```console
-$ JEV_ENCODER=siglip2-so400m-384 jev encoders
+$ JEVIMAGE_ENCODER=siglip2-so400m-384 jevimage encoders
    clip-vit-l-14
    ...
  * siglip2-so400m-384
 
-* $JEV_ENCODER=siglip2-so400m-384. Join names with '+' for an ensemble, e.g. siglip2-base-224+dfn5b-h-14-384.
+* $JEVIMAGE_ENCODER=siglip2-so400m-384. Join names with '+' for an ensemble, e.g. siglip2-base-224+dfn5b-h-14-384.
 ```
 
 | name | checkpoint | input | family | sigmoid `noul` | needs |
 |---|---|---|---|---|---|
-| `siglip2-base-224` | `google/siglip2-base-patch16-224` | 224px | SigLIP2 base — the default | yes | `[local]` |
+| `siglip2-base-224` | `google/siglip2-base-patch16-224` | 224px | SigLIP2 base - the default | yes | `[local]` |
 | `siglip2-base-384` | `google/siglip2-base-patch16-384` | 384px | same backbone, more pixels | yes | `[local]` |
 | `siglip2-so400m-384` | `google/siglip2-so400m-patch16-384` | 384px | shape-optimised 400M vision tower | yes | `[local]` |
 | `siglip2-giant-384` | `google/siglip2-giant-opt-patch16-384` | 384px | the largest entry | yes | `[local]` |
@@ -81,12 +81,12 @@ of the 224px one. Across rows, `base` \< `so400m` \< `giant` in the vision tower
 378 → 729 tokens). That is arithmetic off the names. It is
 not a benchmark, and it says nothing about which one is more accurate on *your* images.
 For that, label a hundred of them and read the per-class table from
-[`train`](/docs/training).
+[`train`](training.md).
 
 **The "sigmoid `noul`" column is the checkpoint's own claim, not a setting.** `HFCLIP`
 reads `logit_scale` and `logit_bias` off the model when it loads it, and leaves them
 `None` when the model has no such parameter
-([`jevimage/encoders.py`](https://github.com/jevimage/jevimage/blob/main/jevimage/encoders.py)). SigLIP-family models were trained
+([`jevimage/encoders.py`](https://github.com/Per0x1de-1337/jevimage/blob/main/jevimage/encoders.py)). SigLIP-family models were trained
 with a pairwise sigmoid loss and carry both; CLIP and MetaCLIP carry a scale only; the
 `OpenCLIP` wrapper sets `logit_bias = None` outright, because an open_clip contrastive
 model has no pairwise bias to publish. A single-caption `noul` needs **both**, so it is a
@@ -158,10 +158,10 @@ vector store, they belong to one encoder. Nothing recomputes them for you.
 
 **4. Single-caption `noul` may vanish.** On an encoder without both calibration numbers it
 raises rather than inventing a probability; the `{"true": ..., "false": ...}` pair form
-works everywhere. See [Question types](/docs/questions).
+works everywhere. See [Question types](questions.md).
 
 **5. Device and dtype are the built-in wrappers' business.** `HFCLIP` and `OpenCLIP` pick
-`$JEV_DEVICE`, else CUDA if present, else CPU, and run bf16 on GPU and fp32 on CPU. A
+`$JEVIMAGE_DEVICE`, else CUDA if present, else CPU, and run bf16 on GPU and fp32 on CPU. A
 custom encoder decides for itself; nothing in the framework will move your model.
 
 ## Ensembles: `'+'`
@@ -295,7 +295,7 @@ Two optional attributes, and only these two, make the single-caption `noul` avai
 | `.logit_bias` | `float` | Shifts it. |
 
 Leave them off entirely, or set them to `None`, and the framework reads them as absent
-(`getattr`, not attribute access — a duck-typed encoder that publishes neither must load,
+(`getattr`, not attribute access - a duck-typed encoder that publishes neither must load,
 not crash). Without them, a single-caption `noul` refuses:
 
 ```text
@@ -424,11 +424,11 @@ print(jevimage.available())
 
 Registering buys three things: `load("name")` by string, membership in `'+'` ensembles,
 and the key itself as the provenance string in a head record. It does **not** make the
-name visible to the `jev` command, which never imports your code:
+name visible to the `jevimage` command, which never imports your code:
 
 ```console
-$ jev ask ds/red/0.png --encoder mean-colour --choice red="a red photo" blue="a blue photo"
-jev: unknown encoder 'mean-colour'. Available: clip-vit-l-14, dfn5b-h-14-384, metaclip2-huge, siglip2-base-224, siglip2-base-384, siglip2-giant-384, siglip2-so400m-384. Register your own with jevimage.register(name, factory) - from Python, in the process that will serve it; the `jev` command only sees these built-in names, because it never imports your code.
+$ jevimage ask ds/red/0.png --encoder mean-colour --choice red="a red photo" blue="a blue photo"
+jevimage: unknown encoder 'mean-colour'. Available: clip-vit-l-14, dfn5b-h-14-384, metaclip2-huge, siglip2-base-224, siglip2-base-384, siglip2-giant-384, siglip2-so400m-384. Register your own with jevimage.register(name, factory) - from Python, in the process that will serve it; the `jevimage` command only sees these built-in names, because it never imports your code.
 ```
 
 A registry name may not contain `+`, which is reserved for ensembles:
@@ -514,12 +514,12 @@ jev = jevimage.load(PromptEnsemble(load_encoder("toy")))
 
 ### Serving your encoder
 
-`jev serve` can only name built-in encoders, for the same reason `jev ask --encoder`
+`jevimage serve` can only name built-in encoders, for the same reason `jevimage ask --encoder`
 cannot: it never imports your code. Build the app yourself instead. `build_app(jev)`
 takes a `Jev` you already made, and everything else about the server is unchanged:
 
 ```python
-# serve_colour.py — uvicorn serve_colour:app --port 8140
+# serve_colour.py - uvicorn serve_colour:app --port 8140
 import jevimage
 from mean_colour import MeanColour
 from jevimage.server import build_app
@@ -530,11 +530,10 @@ app = build_app(jevimage.load(MeanColour(), heads_dir="/var/lib/jev/heads", batc
 ```console
 $ python -m uvicorn serve_colour:app --port 8140
 $ curl -s http://127.0.0.1:8140/v1/health
-{"encoder":"mean-colour","dim":3,"device":"cpu","primitives":["choice","score","noul","head"],"heads":0,"auth":"open","version":"0.1.0"}
+{"encoder":"mean-colour","dim":3,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"open","version":"0.1.19"}
 ```
 
-Give it an explicit `heads_dir`. Without one the server publishes `~/.jev/heads` —
-whatever is in it, including heads trained under a different encoder, which it will then
+Give it an explicit `heads_dir`. Without one the server publishes `~/.jev/heads` - whatever is in it, including heads trained under a different encoder, which it will then
 refuse to answer with. The `"heads":0` above is an empty directory, not a guarantee.
 
 The client side does not change at all, and does not need your encoder module, torch, or
@@ -559,12 +558,12 @@ mean-colour
 requests for a few milliseconds so they ride one forward pass, and skips the wait
 entirely while traffic is thin, so a lone caller pays nothing. It only pays off if your
 encoder is cheaper per image in batches. A neural network is; `MeanColour` is not.
-Pass `api_keys=[...]` to `build_app` to require a bearer token; see [Serving](/docs/serving).
+Pass `api_keys=[...]` to `build_app` to require a bearer token; see [Serving](serving.md).
 
 ### If your encoder returns the wrong thing
 
 The engine checks the norm before it computes anything, because a rescaled embedding
-saturates every softmax to exactly `1.0` and `0.0` — the one number this API must never
+saturates every softmax to exactly `1.0` and `0.0` - the one number this API must never
 emit by accident:
 
 ```python
@@ -646,11 +645,11 @@ images again. In practice:
 
 1. Keep the old encoder loadable until the new heads exist. Two `Jev` instances can share
    one heads directory; only the mismatched *head* is refused, not the directory.
-2. Retrain under the new encoder — `jev train NAME FOLDER --encoder NEW`, or `jev.train()`
+2. Retrain under the new encoder - `jevimage train NAME FOLDER --encoder NEW`, or `jev.train()`
    from a `Jev` loaded with it. Under a different head name if you want to A/B them.
 3. Read the per-class comparison before you cut over. A bigger encoder is not automatically
-   better on your classes; that is what [`compare()`](/docs/training) is for.
-4. `jev rm OLD` when the new head wins.
+   better on your classes; that is what [`compare()`](training.md) is for.
+4. `jevimage rm OLD` when the new head wins.
 
 Keeping labelled folders around is therefore part of using heads. Treat the head file as a
 cache of a fit, not as the only copy of your data.
@@ -681,7 +680,7 @@ What follows from that:
   `"a"` and `"a+b"` costs one copy of `a`, not two.
 - **Nothing is ever evicted.** Loading four registry names in one process keeps four
   models resident. If you are probing encoders in a loop, do it in separate processes.
-- **An instance you pass to `jevimage.load(MyEncoder())` is not cached at all** — it never
+- **An instance you pass to `jevimage.load(MyEncoder())` is not cached at all** - it never
   went through the registry. You own its lifetime.
 - **`register()` drops the cached instance for that name**, so re-registering during
   development takes effect on the next `load()`. It does not touch instances already
@@ -742,11 +741,11 @@ own hardware; that is the only ratio that governs your bill.
 
 | what you see | what it means |
 |---|---|
-| `unknown encoder 'x'. Available: ...` | Typo, or a name registered in a different process — including the `jev` CLI, which never imports your code. |
+| `unknown encoder 'x'. Available: ...` | Typo, or a name registered in a different process - including the `jevimage` CLI, which never imports your code. |
 | `malformed ensemble name 'x'` | A leading or trailing `+`, a doubled `++`, a `+ +`, or a bare `+`. Spaces *around* names are stripped and are fine. |
 | `'+' is reserved for ensembles` | `register()` name contains `+`. |
 | `embeddings must be L2-normalised, got norm N` | Your `img()` did not normalise. Wrap the return in `jevimage.encoders.unit()`. |
-| `encoder 'x' has no calibrated sigmoid` | Single-caption `noul` on an encoder without both `logit_scale` and `logit_bias` — including every ensemble. Use the `{"true": ..., "false": ...}` pair. |
+| `encoder 'x' has no calibrated sigmoid` | Single-caption `noul` on an encoder without both `logit_scale` and `logit_bias` - including every ensemble. Use the `{"true": ..., "false": ...}` pair. |
 | `head 'h' was trained on encoder 'a' but this instance runs 'b'` | Load `a`, or retrain `h` under `b`. No conversion exists. |
 | `head 'h' records no encoder` | A head from before provenance existed, or a hand-built file. Retrain it. |
 | `jevimage.load runs the encoder in this process, which needs torch` | API-only install. `pip install 'jevimage[local]'`, or use `jevimage.connect(url)`. |
@@ -754,11 +753,11 @@ own hardware; that is the only ratio that governs your bill.
 
 ---
 
-Next: [Question types](/docs/questions) for what each encoder choice changes about `noul`,
-[Training a head](/docs/training) for beating prompts without swapping models, and
-[Serving](/docs/serving) for running one for other people. Source:
-[`jevimage/encoders.py`](https://github.com/jevimage/jevimage/blob/main/jevimage/encoders.py).
+Next: [Question types](questions.md) for what each encoder choice changes about `noul`,
+[Training a head](training.md) for beating prompts without swapping models, and
+[Serving](serving.md) for running one for other people. Source:
+[`jevimage/encoders.py`](https://github.com/Per0x1de-1337/jevimage/blob/main/jevimage/encoders.py).
 
 ---
 
-[← Training a head](/docs/training) · [Docs index](/docs/index) · [Serving →](/docs/serving)
+[← Training a head](training.md) · [Docs index](index.md) · [Serving →](serving.md)

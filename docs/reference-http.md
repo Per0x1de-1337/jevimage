@@ -8,17 +8,17 @@ arguments and the same return shape (a local `Jev` has no server to report on, s
 no `health()`). `POST /v1/ask` is `ask()`, `POST /v1/embed` is `embed()`,
 `/v1/heads` is `train()` / `list_heads()` / `delete_head()`. There are no HTTP-only
 concepts to learn, and `jevimage.connect(url)` is a client that already speaks all of it;
-see [Python API reference](/docs/reference-python).
+see [Python API reference](reference-python.md).
 
 Everything is JSON in, JSON out. Images arrive as base64: either bare, or as a
 `data:image/png;base64,...` URL (the server strips the prefix and does not check that it
 matches the actual bytes; the format is decided by the decoded content).
 
-Start a server with `jev serve`; see [Serving](/docs/serving) for deployment. A quick one:
+Start a server with `jevimage serve`; see [Serving](serving.md) for deployment. A quick one:
 
 ```bash
 pip install 'jevimage[serve]'
-jev serve --port 8000 --api-key s3cret
+jevimage serve --port 8731 --api-key s3cret
 ```
 
 ## The server these examples run against
@@ -39,13 +39,13 @@ Three servers were used:
 | `http://127.0.0.1:8127` | `toy-calibrated` (`logit_scale=100`, `logit_bias=-10`) | `Authorization: Bearer s3cret` |
 
 Images in the examples are the flat 64x64 PNGs of the `ds/` fixture, written by
-[`examples/make_fixtures.py`](https://github.com/jevimage/jevimage/blob/main/examples/make_fixtures.py); a flat square compresses to
+[`examples/make_fixtures.py`](https://github.com/Per0x1de-1337/jevimage/blob/main/examples/make_fixtures.py); a flat square compresses to
 a couple of hundred bytes, which is why the base64 is short enough to paste.
 The reusable recipe is:
 
 ```bash
 IMG=$(base64 -w0 photo.png)
-curl -s http://127.0.0.1:8000/v1/ask -H 'Content-Type: application/json' \
+curl -s http://127.0.0.1:8731/v1/ask -H 'Content-Type: application/json' \
      -d "{\"image\":\"$IMG\",\"questions\":{...}}"
 ```
 
@@ -62,7 +62,7 @@ whitespace separates it from the key: `bearer <key>` and `BEARER\t<key>` work to
 itself is compared exactly.
 
 The server accepts any one of the keys it was started with. Keys come from
-`jev serve --api-key K1 K2`, from `$JEV_API_KEYS` (split on commas *or* whitespace), or
+`jevimage serve --api-key K1 K2`, from `$JEVIMAGE_API_KEYS` (split on commas *or* whitespace), or
 from `build_app(jev, api_keys=[...])`. With no keys configured, every route is open and
 `GET /v1/health` reports `"auth": "open"`.
 
@@ -82,7 +82,7 @@ Things worth knowing before you put this on a network:
 curl -s -w ' [%{http_code}]' http://127.0.0.1:8126/v1/heads
 ```
 ```json
-{"detail":"send 'Authorization: Bearer <key>' with a key this server was started with (JEV_API_KEYS)"} [401]
+{"detail":"send 'Authorization: Bearer <key>' with a key this server was started with (JEVIMAGE_API_KEYS)"} [401]
 ```
 
 The same 401 comes back for a wrong key and for a header without the `Bearer ` prefix.
@@ -128,7 +128,7 @@ the 12 MB ceiling is a request of roughly 96 MB that no check in the server reje
 cap it at your proxy if that matters.
 
 Decoded pixels *are* capped across the request as well as per image: 100 MP in total,
-which still admits eight 12 MP camera photos. A proxy body cap cannot bound this — eight
+which still admits eight 12 MP camera photos. A proxy body cap cannot bound this - eight
 solid-colour 50 MP PNGs are 1.7 MB on the wire and 1.2 GB of decoded pixels, and every
 image in a request is decoded before any of them is embedded.
 
@@ -141,8 +141,8 @@ Every error the application raises is a JSON object with one key:
 ```
 
 Two things sit outside that. A 500 is Starlette's own plain-text `Internal Server Error`,
-with no JSON at all — any unhandled exception takes that path, and this package installs
-no 500 handler — so a client that parses every error body as JSON must guard the one case
+with no JSON at all - any unhandled exception takes that path, and this package installs
+no 500 handler - so a client that parses every error body as JSON must guard the one case
 it most needs to log. And a request the body schema rejects outright has `detail` as
 FastAPI's list of field reports instead of a string:
 
@@ -176,7 +176,7 @@ thing to hand anyone who can guess a head name), so over HTTP that part is remov
 | 409 | `GET /v1/heads/{name}/compare` on a head saved without its embeddings. |
 | 413 | Too many images, too many examples, base64 over 12 MB, over 50 MP in one image or 100 MP across the request, or a decode PIL's own decompression-bomb guard refused. |
 | 415 | An image that decoded but is not JPEG, PNG or WebP. |
-| 422 | Anything the engine refuses: a malformed question, an unknown head, a bad temperature, a bad head name, a training set with one class — plus request-schema failures. |
+| 422 | Anything the engine refuses: a malformed question, an unknown head, a bad temperature, a bad head name, a training set with one class - plus request-schema failures. |
 | 500 | An unhandled server-side exception, e.g. the encoder running out of memory. The body is the plain string `Internal Server Error`, not JSON. |
 
 ---
@@ -192,8 +192,8 @@ returns counts, it does not touch the model.
 |---|---|---|
 | `encoder` | string | Encoder name. A head trained here records this name and refuses to run under any other. |
 | `dim` | int | Embedding width. |
-| `device` | string | `cuda`, `cpu`, … — whatever the encoder reports, `"cpu"` if it reports nothing. |
-| `primitives` | string[] | Always `["choice","score","noul","head"]` for this version. |
+| `device` | string | `cuda`, `cpu`, … - whatever the encoder reports, `"cpu"` if it reports nothing. |
+| `primitives` | string[] | Always `["choice", "score", "noul", "head"]` for this version. |
 | `heads` | int | Heads currently on disk, after a re-scan. |
 | `auth` | string | `"bearer"` if keys are configured, `"open"` if not. |
 | `version` | string | `jevimage.__version__`, which is also the OpenAPI document's version. |
@@ -206,7 +206,7 @@ work here, and whether a single-caption `noul` is possible (it needs an encoder 
 curl -s http://127.0.0.1:8123/v1/health
 ```
 ```json
-{"encoder":"toy","dim":16,"device":"cpu","primitives":["choice","score","noul","head"],"heads":0,"auth":"open","version":"0.1.0"}
+{"encoder":"toy","dim":16,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"open","version":"0.1.19"}
 ```
 
 **Status:** 200 only.
@@ -220,7 +220,7 @@ package exists for: N questions cost barely more than one *once their captions a
 cached*, because the encoder runs once and each question is then a matmul. A caption this
 process has not encoded before costs a text-tower forward pass first, so the first call
 with a fresh question set is not cheap; see
-[encoders.md#timings](/docs/encoders#timings).
+[encoders.md#timings](encoders.md#timings).
 
 **Request**
 
@@ -245,7 +245,7 @@ curl -s -w ' [%{http_code}]' -X POST http://127.0.0.1:8123/v1/ask \
 {"detail":"send 'image' or 'images', not both: 'image' returns one answer object, 'images' returns a list"} [422]
 ```
 
-Question bodies are documented in [Question types](/docs/questions). Summarised:
+Question bodies are documented in [Question types](questions.md). Summarised:
 
 | `type` | Required fields | Answer fields |
 |---|---|---|
@@ -436,7 +436,7 @@ directory on every call, so it also picks up heads another process wrote.
 Train a head: upload labelled images, get back the fitted head's metadata plus the
 comparison against zero-shot prompts. The encoder stays frozen; all that is fitted is a
 linear readout over its embeddings, which is why this is seconds and tens of kilobytes.
-See [Training a head](/docs/training).
+See [Training a head](training.md).
 
 **Request**
 
@@ -549,7 +549,7 @@ A second 404 shape exists: a `.pt` file that is present but will not load says s
 than claiming the head does not exist.
 
 ```bash
-printf 'not a torch file' > $JEV_HEADS_DIR/junkdoc.pt
+printf 'not a torch file' > $JEVIMAGE_HEADS_DIR/junkdoc.pt
 curl -s -w ' [%{http_code}]' http://127.0.0.1:8123/v1/heads/junkdoc
 ```
 ```json
@@ -632,7 +632,7 @@ curl -s -X DELETE http://127.0.0.1:8123/v1/heads/docs_colour
 |---|---|
 | 200 | Deleted. Body is `{"deleted": "<name>"}`. |
 | 401 | Keys configured, header missing or wrong. |
-| 404 | `{"detail":"no head named 'nope'"}` — nothing was deleted. Not idempotent-friendly: a second delete of the same head is a 404. |
+| 404 | `{"detail":"no head named 'nope'"}` - nothing was deleted. Not idempotent-friendly: a second delete of the same head is a 404. |
 | 422 | The name is not a legal head name. |
 
 ```bash
@@ -658,7 +658,7 @@ sit outside the `/v1` router.
 curl -s http://127.0.0.1:8126/openapi.json | jq -c '{info, paths: (.paths|keys)}'
 ```
 ```json
-{"info":{"title":"jevimage","version":"0.1.0"},"paths":["/v1/ask","/v1/embed","/v1/heads","/v1/heads/{name}","/v1/heads/{name}/compare","/v1/health"]}
+{"info":{"title":"jevimage","version":"0.1.19"},"paths":["/v1/ask","/v1/embed","/v1/heads","/v1/heads/{name}","/v1/heads/{name}/compare","/v1/health"]}
 ```
 
 The schema is generated from the request models, so it is exact about request bodies and
@@ -678,8 +678,8 @@ button, and will happily send the request without it and show you the 401.
 - **Training blocks.** `POST /v1/heads` embeds every example inline. There is no job id,
   no progress and no way to cancel other than dropping the connection.
 - **A head is tied to its encoder by name.** Point a server at the same head directory
-  with a different `JEV_ENCODER` and every `head` question becomes a 422, and so does
-  `GET /v1/heads/{name}/compare` — though `GET /v1/heads` still lists the head and
+  with a different `JEVIMAGE_ENCODER` and every `head` question becomes a 422, and so does
+  `GET /v1/heads/{name}/compare` - though `GET /v1/heads` still lists the head and
   `GET /v1/heads/{name}` still returns it. The same embedding width does not mean the
   same embedding space.
 - **A held-out number off two examples is a coin toss.** `k` is `min(5, thinnest class)`,
@@ -697,17 +697,17 @@ neither torch nor transformers:
 |---|---|
 | `GET /v1/health` | `health()` |
 | `POST /v1/ask` | `ask(image, questions, temperature=None)` |
-| `POST /v1/embed` | `embed(images)` — chunks past the 8-image cap for you |
+| `POST /v1/embed` | `embed(images)` - chunks past the 8-image cap for you |
 | `POST /v1/heads` | `train(name, data, epochs=500, max_per_class=None)` |
 | `GET /v1/heads` | `list_heads()` |
 | `GET /v1/heads/{name}` | `head(name)` |
-| `GET /v1/heads/{name}/compare` | `compare(name)` — `None` on 409 |
-| `DELETE /v1/heads/{name}` | `delete_head(name)` — `False` on 404 |
+| `GET /v1/heads/{name}/compare` | `compare(name)` - `None` on 409 |
+| `DELETE /v1/heads/{name}` | `delete_head(name)` - `False` on 404 |
 
 Non-2xx responses become `jevimage.JevError`, which carries `.status` and `.detail`
-verbatim. See [Python API reference](/docs/reference-python); for running the server,
-[Serving](/docs/serving).
+verbatim. See [Python API reference](reference-python.md); for running the server,
+[Serving](serving.md).
 
 ---
 
-[← Python reference](/docs/reference-python) · [Docs index](/docs/index) · [Cookbook →](/docs/cookbook)
+[← Python reference](reference-python.md) · [Docs index](index.md) · [Cookbook →](cookbook.md)

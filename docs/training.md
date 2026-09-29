@@ -61,7 +61,7 @@ The price is real and worth stating: a linear layer can only use what the encode
 already represents. If the encoder cannot tell your two classes apart at all, no linear
 boundary over its output will either, and you will see that as a held-out accuracy near
 chance. The fix then is a stronger encoder, not more epochs. See [Choosing an
-encoder](/docs/encoders).
+encoder](encoders.md).
 
 ## The folder layout
 
@@ -75,7 +75,7 @@ shots/
 ```
 
 That folder is 36 flat squares - 12 warm, 12 near-white, 12 dark blue - written by
-[`examples/make_fixtures.py`](https://github.com/jevimage/jevimage/blob/main/examples/make_fixtures.py) along with the `colours/`
+[`examples/make_fixtures.py`](https://github.com/Per0x1de-1337/jevimage/blob/main/examples/make_fixtures.py) along with the `colours/`
 folder used further down. The stand-in encoder at the bottom of this page sees an image's
 mean colour and nothing else, so those exact squares are what every number below is a
 number of; run the script in the directory you run these blocks from.
@@ -160,7 +160,7 @@ jev.train("lighting", {"daylight": [img1, img2, ...],            # {label: [imag
 jev.train("lighting", [(img1, "daylight"), (img2, "flash")])     # (image, label) pairs
 ```
 
-An "image" is anything [`to_image()`](/docs/reference-python) accepts: a path, a `Path`,
+An "image" is anything [`to_image()`](reference-python.md) accepts: a path, a `Path`,
 raw encoded bytes, a `PIL.Image`, or a `data:image/...;base64,...` string. Labels are
 passed through `str()`, so integer labels become `"0"`, `"1"`.
 
@@ -303,14 +303,14 @@ template; the server always uses the default.)
 ### A case where training makes a class worse
 
 Same encoder, a different folder (`colours/`, also written by
-[`examples/make_fixtures.py`](https://github.com/jevimage/jevimage/blob/main/examples/make_fixtures.py)): 12 `red`, 12 `blue`, and a
+[`examples/make_fixtures.py`](https://github.com/Per0x1de-1337/jevimage/blob/main/examples/make_fixtures.py)): 12 `red`, 12 `blue`, and a
 `green` class with exactly two images, one yellow-green and one cyan-green. The class
 name is a word the encoder understands, so zero-shot handles it perfectly. The head has
 one green example to learn from per fold - and the two greens are far enough apart that
 the one it saw does not predict the one it is scored on.
 
 ```console
-$ jev train colour colours/
+$ jevimage train colour colours/
 'colour': 26 examples, 3 classes, encoder tint
 
 class   n  zero-shot  trained    delta
@@ -331,10 +331,10 @@ This is the normal case for classes that already have good names. Training pays 
 your labels are *not* describable: internal categories, part numbers, pass/fail criteria,
 anything where `"a photo of {label}"` is a sentence nobody would write.
 
-> The `jev train` output above was produced with the stand-in encoder registered under
+> The `jevimage train` output above was produced with the stand-in encoder registered under
 > the name `tint` by a `sitecustomize.py`, which is the only way the CLI ever sees a
-> custom encoder (see [reference-cli.md](/docs/reference-cli#custom-encoders-and-the-cli));
-> the real command line is `jev train colour colours/` with whatever encoder is your
+> custom encoder (see [reference-cli.md](reference-cli.md#custom-encoders-and-the-cli));
+> the real command line is `jevimage train colour colours/` with whatever encoder is your
 > default.
 
 The table is `head.comparison` and nothing else; the closing line appears whenever
@@ -373,8 +373,8 @@ wherever the encoder is.
 | `head.name` | The name you trained it under, which is also its filename stem. |
 | `head.classes` | Class names, **sorted**, in the column order of `W`. |
 | `head.n` | Total examples fitted. |
-| `head.counts` | `{label: count}` — read this next to `accuracy`. |
-| `head.accuracy` | Held-out k-fold accuracy — `cv_accuracy` in the dict. `None` only for a head file that never recorded one; every head this version writes has one, because `train()` refuses a class with fewer than 2 examples and so `k` is always at least 2. |
+| `head.counts` | `{label: count}` - read this next to `accuracy`. |
+| `head.accuracy` | Held-out k-fold accuracy - `cv_accuracy` in the dict. `None` only for a head file that never recorded one; every head this version writes has one, because `train()` refuses a class with fewer than 2 examples and so `k` is always at least 2. |
 | `head.per_class` | `{label: held-out accuracy}` for that class. |
 | `head.encoder` | The encoder name that fitted it. Checked at query time. |
 | `head.comparison` | The zero-shot comparison, or `None` when it was not computed. |
@@ -412,16 +412,16 @@ you want them.
 One file per head, in a directory you can point anywhere:
 
 ```text
-$JEV_HEADS_DIR          if set — wins outright
-else $JEV_HOME/heads    if JEV_HOME is set
+$JEVIMAGE_HEADS_DIR          if set - wins outright
+else $JEVIMAGE_HOME/heads    if JEVIMAGE_HOME is set
 else ~/.jev/heads
 ```
 
-`jevimage.load(heads_dir=...)`, `jev serve --heads-dir ...` and `jevimage.Jev(...)`
-override it for one instance. `jev heads` prints the directory it read:
+`jevimage.load(heads_dir=...)`, `jevimage serve --heads-dir ...` and `jevimage.Jev(...)`
+override it for one instance. `jevimage heads` prints the directory it read:
 
 ```console
-$ JEV_HEADS_DIR=heads2 jev heads
+$ JEVIMAGE_HEADS_DIR=heads2 jevimage heads
 head            encoder  classes   n  held out     created
 lighting           tint        3  36     97.2%  2026-09-23
 lighting_small     tint        3  12    100.0%  2026-09-23
@@ -462,13 +462,13 @@ $ curl -s localhost:8177/v1/heads | python3 -c "import json,sys;print([h['name']
   x" about a file sitting right there is a lie:
 
 ```console
-$ jev heads
+$ jevimage heads
 junk.pt is present but unreadable: UnpicklingError: Weights only load failed. In PyTorch 2.6, we changed the default value of the `weights_only` argument in `torch.load` from `False` to `True`. Re-running `torch.
 head    encoder  classes   n  held out     created
 colour     tint        3  26     92.3%  2026-09-23
 ```
 
-(The first line goes to stderr. `jev heads --json` prints no warning at all; it carries
+(The first line goes to stderr. `jevimage heads --json` prints no warning at all; it carries
 the same information in its `"broken"` object, so a script reading only stdout can see
 it.)
 
@@ -516,9 +516,9 @@ In a container, put the file where the process will look and set nothing else:
 FROM python:3.12-slim
 RUN pip install 'jevimage[serve]'
 COPY heads/lighting.pt /srv/heads/
-ENV JEV_HEADS_DIR=/srv/heads
-ENV JEV_ENCODER=siglip2-base-224
-CMD ["jev", "serve", "--host", "0.0.0.0"]
+ENV JEVIMAGE_HEADS_DIR=/srv/heads
+ENV JEVIMAGE_ENCODER=siglip2-base-224
+CMD ["jevimage", "serve", "--host", "0.0.0.0"]
 ```
 
 Nothing has to be registered, imported or migrated; the store picks up whatever `.pt`
@@ -564,6 +564,24 @@ from an interpreter where `import torch` fails. The differences to know about:
 - **The name is validated before the upload**, as it is locally before anything is
   encoded, so a typo costs nothing.
 - The comparison comes back with the response; `jev.compare(name)` re-runs it later.
+- **A hosted server may cap how many training images one account may keep.** That is a
+  service policy rather than anything in this package - `jevimage serve` is
+  single-tenant and caps nothing - but a client should expect it. api.jevimage.org
+  allows 1000 across all of an account's heads and publishes the figure in
+  `/v1/models`; the refusal is a 413 naming how much room is left. Retraining a head
+  does not count its old copy, so a head can always be retrained:
+
+```console
+$ jevimage train another ds/ --url https://api.jevimage.org
+jevimage: training images per account are capped at 1000; your other heads already use
+859, so this one can add at most 141 (you sent 428). Delete a head, or train on fewer
+images per class. [HTTP 413 from POST https://api.jevimage.org/v1/heads]
+```
+
+- **On a multi-tenant server a head belongs to the key that trained it**, and is listed
+  and runnable only by that key. Heads that belong to nobody are the shared ones:
+  everyone may use them and no one may delete them, so deleting one is a 404 rather
+  than a 403 - the alternative would tell you a head exists that you may not touch.
 
 From the shell it is the same command with `--url`, and the client's 60-second default
 applies there too. This 36-image set goes through it in about a second, but a real
@@ -571,20 +589,20 @@ dataset, or a server still loading its weights, runs past 60 seconds, and then t
 command fails:
 
 ```console
-$ jev train lighting_cli shots/ --url http://127.0.0.1:8278
-jev: POST http://127.0.0.1:8278/v1/heads did not answer within 60.0s; raise timeout= if the server is loading a model
+$ jevimage train lighting_cli shots/ --url http://127.0.0.1:8278
+jevimage: POST http://127.0.0.1:8278/v1/heads did not answer within 60.0s; raise timeout= if the server is loading a model
 $ echo $?
 1
 ```
 
 (Produced against a listener that accepts the connection and never answers, which is what
 a too-slow server looks like from here.) The knob the message asks for is on the command
-too: `jev train --timeout SECONDS` (also `$JEV_TIMEOUT`, and the same flag on `jev ask`)
+too: `jevimage train --timeout SECONDS` (also `$JEVIMAGE_TIMEOUT`, and the same flag on `jevimage ask`)
 is `connect(url, timeout=...)` from the shell, so a big folder trains either way. The
 other commands are quick and need none of it:
 
 ```console
-$ jev heads --url http://127.0.0.1:8177
+$ jevimage heads --url http://127.0.0.1:8177
 head      encoder  classes   n  held out     created
 colour       tint        3  26     92.3%  2026-09-23
 lighting     tint        3  36     97.2%  2026-09-23
@@ -592,10 +610,10 @@ lighting     tint        3  36     97.2%  2026-09-23
 http://127.0.0.1:8177
 ```
 
-`--url` also reads `$JEV_URL`, with `$JEV_API_KEY` for a server started with keys.
+`--url` also reads `$JEVIMAGE_URL`, with `$JEVIMAGE_API_KEY` for a server started with keys.
 
-See [Serving](/docs/serving) for running the server end, and
-[HTTP reference](/docs/reference-http) for the raw `POST /v1/heads` shape.
+See [Serving](serving.md) for running the server end, and
+[HTTP reference](reference-http.md) for the raw `POST /v1/heads` shape.
 
 ## Limits
 
@@ -639,7 +657,7 @@ A head stops being usable when:
 | Encoder width changed | `head 'x' expects 768-dim embeddings, this encoder produces 1152` | Retrain. |
 | Damaged file | `head 'x' lists 3 classes but its weights have 2 columns; the file is damaged, retrain it` | Retrain. |
 | No encoder recorded | `head 'x' records no encoder, so it cannot be checked against this one; retrain it` | Retrain. A head with no provenance is refused rather than run unchecked. |
-| Unreadable file | listed by `jev heads` with the loader's reason, and `ask()` raises `KeyError: x.pt is present in <dir> but unreadable: <reason>. Delete it, or retrain the head.` | Replace the file. |
+| Unreadable file | listed by `jevimage heads` with the loader's reason, and `ask()` raises `KeyError: x.pt is present in <dir> but unreadable: <reason>. Delete it, or retrain the head.` | Replace the file. |
 
 The check is on the encoder **name**, not on its weights. If you `register()` a
 different model under a name you have used before, or an ensemble's members change while
@@ -688,11 +706,11 @@ a thousand images of encoding.
 JevError: POST http://127.0.0.1:8177/v1/heads did not answer within 60.0s; raise timeout= if the server is loading a model
 ```
 Remote training that outran the client's default timeout. Pass `timeout=` to `connect()`,
-or `--timeout` to `jev train`.
+or `--timeout` to `jevimage train`.
 
 And the failure that raises nothing at all: a head that fits, saves, works, and is worse
 than the prompts it replaced. That one only shows up in the comparison, which is why it
-is printed at the end of every `jev train`.
+is printed at the end of every `jevimage train`.
 
 ## The stand-in encoder used on this page
 
@@ -722,18 +740,18 @@ class Tint(jevimage.Encoder):
 
 
 jevimage.register("tint", Tint)     # usable from Python as jevimage.load("tint");
-                                   # `jev --encoder tint` only sees it if a
+                                   # `jevimage --encoder tint` only sees it if a
                                    # sitecustomize.py runs this at startup
                                    # (see reference-cli.md#custom-encoders-and-the-cli)
 ```
 
 ---
 
-Next: [Question types](/docs/questions) for the other three things you can ask ·
-[Choosing an encoder](/docs/encoders) when a head cannot beat the prompts ·
-[Serving](/docs/serving) to train through a server you run ·
-[Python reference](/docs/reference-python) for exact signatures.
+Next: [Question types](questions.md) for the other three things you can ask ·
+[Choosing an encoder](encoders.md) when a head cannot beat the prompts ·
+[Serving](serving.md) to train through a server you run ·
+[Python reference](reference-python.md) for exact signatures.
 
 ---
 
-[← Question types](/docs/questions) · [Docs index](/docs/index) · [Choosing an encoder →](/docs/encoders)
+[← Question types](questions.md) · [Docs index](index.md) · [Choosing an encoder →](encoders.md)

@@ -9,14 +9,14 @@ run, and its output pasted back, shortened only where a long absolute path or a
 repeated float would obscure the point, never altered.
 
 For the ideas behind the API (why answers are probabilities, why a head is linear),
-start at [index.md](/docs/index). For the same surface over HTTP see
-[reference-http.md](/docs/reference-http), and for the shell see
-[reference-cli.md](/docs/reference-cli).
+start at [index.md](index.md). For the same surface over HTTP see
+[reference-http.md](reference-http.md), and for the shell see
+[reference-cli.md](reference-cli.md).
 
 **About the numbers on this page.** Real encoder weights are a multi-gigabyte download,
 so every example runs against a deterministic 16-dimensional *toy* encoder
 (`name = "toy"`, `dim = 16`, no `logit_scale`/`logit_bias`) and the 12-image red/blue
-`ds/` dataset that [`examples/make_fixtures.py`](https://github.com/jevimage/jevimage/blob/main/examples/make_fixtures.py) writes. The shapes, types, keys and error messages are exactly what you get from
+`ds/` dataset that [`examples/make_fixtures.py`](https://github.com/Per0x1de-1337/jevimage/blob/main/examples/make_fixtures.py) writes. The shapes, types, keys and error messages are exactly what you get from
 SigLIP2; the probability values are the toy's and mean nothing about images. Where a
 number would be misleading if you read it as a model result, it is called out.
 
@@ -82,7 +82,7 @@ To use a server instead - no torch required - call jevimage.connect(url).
 (underlying import error: No module named 'torch')
 ```
 
-See [install.md](/docs/install) for the four install paths.
+See [install.md](install.md) for the four install paths.
 
 ---
 
@@ -99,8 +99,8 @@ Loads an encoder into this process and returns a [`Jev`](#jev).
 
 | Parameter | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `encoder` | `str`, `Encoder`, or `None` | `None` | A registry name, `'a+b'` for an ensemble, or any object with `.name`/`.dim`/`.img()`/`.txt()` used as-is. `None` reads `$JEV_ENCODER`, else [`DEFAULT`](#default). |
-| `heads_dir` | path-like or `None` | `None` | Where trained heads live. `None` means `$JEV_HEADS_DIR`, else `$JEV_HOME/heads`, else `~/.jev/heads`. |
+| `encoder` | `str`, `Encoder`, or `None` | `None` | A registry name, `'a+b'` for an ensemble, or any object with `.name`/`.dim`/`.img()`/`.txt()` used as-is. `None` reads `$JEVIMAGE_ENCODER`, else [`DEFAULT`](#default). |
+| `heads_dir` | path-like or `None` | `None` | Where trained heads live. `None` means `$JEVIMAGE_HEADS_DIR`, else `$JEVIMAGE_HOME/heads`, else `~/.jev/heads`. |
 | `temperature` | `float` or `None` | `None` | Softmax divisor for `choice`/`score`/`noul` pair. `None` uses `1 / encoder.logit_scale` when the encoder publishes one, else `0.01`. Must be a real number between `1e-6` and `1e6`. |
 | `batch` | `bool` | `False` | Hold single-image `embed()` calls for a few milliseconds so concurrent ones ride one forward pass. Worth it in a server, pure overhead in a script. |
 
@@ -124,7 +124,7 @@ jevimage.load("nope")
 KeyError: "unknown encoder 'nope'. Available: clip-vit-l-14, dfn5b-h-14-384,
 metaclip2-huge, siglip2-base-224, siglip2-base-384, siglip2-giant-384,
 siglip2-so400m-384. Register your own with jevimage.register(name, factory) - from
-Python, in the process that will serve it; the `jev` command only sees these built-in
+Python, in the process that will serve it; the `jevimage` command only sees these built-in
 names, because it never imports your code."
 ```
 
@@ -137,13 +137,13 @@ jevimage.connect(url: str, *, api_key: str | None = None, timeout: float = 60.0,
                  max_edge: int | None = 384) -> Remote
 ```
 
-Returns a [`Remote`](#remote) pointed at a `jev serve` instance. Downloads nothing,
+Returns a [`Remote`](#remote) pointed at a `jevimage serve` instance. Downloads nothing,
 imports no torch.
 
 | Parameter | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `url` | `str` | — | Base URL including scheme. Trailing slashes are stripped. |
-| `api_key` | `str` or `None` | `None` | Sent as `Authorization: Bearer <key>` on every `/v1` call. `None` for an open server. Refused at construction with a `ValueError` if it has surrounding whitespace (the usual `$(cat key.txt)` newline) or characters that cannot go in an HTTP header — no server key can have either, since `$JEV_API_KEYS` is split on whitespace. Redirects are refused, not followed, so the key never travels to a host you did not name — use `https` and a URL you control. |
+| `url` | `str` | none | Base URL including scheme. Trailing slashes are stripped. |
+| `api_key` | `str` or `None` | `None` | Sent as `Authorization: Bearer <key>` on every `/v1` call. `None` for an open server. Refused at construction with a `ValueError` if it has surrounding whitespace (the usual `$(cat key.txt)` newline) or characters that cannot go in an HTTP header - no server key can have either, since `$JEVIMAGE_API_KEYS` is split on whitespace. Redirects are refused, not followed, so the key never travels to a host you did not name - use `https` and a URL you control. |
 | `timeout` | `float` | `60.0` | Seconds per request. Raise it if the server may still be loading a model. |
 | `max_edge` | `int` or `None` | `384` | Downscale an image to this longest edge before uploading it. No encoder in the registry reads more than 384px, so anything larger is upload time spent on pixels the server throws away: a 2560px PNG goes from 3.1 MB on the wire to 26 KB. Size matters more than it looks on a fresh connection: TCP starts with a ~14KB window, so each doubling of the body costs another round trip. Measured at 190ms RTT, 79KB took 940ms and 26KB took 660ms. Images already within the limit are sent byte for byte, unmodified, and so is an oversized one whose downscaled re-encode would not actually be smaller (a small flat-colour PNG, say). A `data:` URL is passed through exactly as given, since it is already the bytes that go on the wire. `None` disables it. |
 
@@ -236,7 +236,7 @@ a["busy"]       # -> <score 1.28/2>
 a["outside"]    # -> <noul 0.046>
 ```
 
-Question shapes are covered in full in [questions.md](/docs/questions). The four `type`
+Question shapes are covered in full in [questions.md](questions.md). The four `type`
 values are `choice`, `score`, `noul` and `head`; every type also accepts an optional
 `"prompt"` template that must contain `{}`.
 
@@ -289,10 +289,10 @@ Fit a linear head on the frozen encoder and save it to `heads_dir`.
 
 | Parameter | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `name` | `str` | — | 1–64 chars from `[A-Za-z0-9._-]`, starting alphanumeric. Becomes a filename, so it is validated, never sanitised. |
-| `data` | folder path, `{label: [images]}`, or `[(image, label)]` | — | See [`as_examples`](#as_examples). |
+| `name` | `str` | none | 1–64 chars from `[A-Za-z0-9._-]`, starting alphanumeric. Becomes a filename, so it is validated, never sanitised. |
+| `data` | folder path, `{label: [images]}`, or `[(image, label)]` | none | See [`as_examples`](#as_examples). |
 | `epochs` | `int` | `500` | Adam steps for each fit (k CV fits plus the final one). `Remote.train` bounds this to 1..5000 and refuses anything else locally, because the server does (5 million epochs on 4000 examples is an outage); a local `Jev` takes any int. |
-| `max_per_class` | `int` or `None` | `None` | Take at most this many examples per label, in all three `data` shapes — see [`as_examples`](#as_examples). A positive int, or `None` for no cap; anything else is refused by name. |
+| `max_per_class` | `int` or `None` | `None` | Take at most this many examples per label, in all three `data` shapes - see [`as_examples`](#as_examples). A positive int, or `None` for no cap; anything else is refused by name. |
 | `template` | `str` or `None` | `None` | The zero-shot prompt template used for the **comparison only**, not for training. Default `"a photo of {}"`. |
 
 Returns a [`Head`](#head) whose `.comparison` is already filled in. Raises `ValueError`
@@ -442,8 +442,8 @@ Methods: [`health`](#remotehealth), `ask`, `embed`, `train`, `compare`, `head`,
 
 | | `Jev` | `Remote` |
 | --- | --- | --- |
-| `ask_embedding` | yes | **absent** — its purpose is skipping the network |
-| `health` | **absent** — there is no server to report on | yes |
+| `ask_embedding` | yes | **absent** - its purpose is skipping the network |
+| `health` | **absent** - there is no server to report on | yes |
 | `embed` return | `torch.Tensor` | `torch.Tensor` if torch is installed, else `list[list[float]]` |
 | `embed` batching | uncapped | chunked into requests of 8, transparently |
 | `train`/`compare` | take `template=` | do not (the server picks the default template) |
@@ -475,7 +475,7 @@ jev.health()
 ```json
 {"encoder": "toy", "dim": 16, "device": "cpu",
  "primitives": ["choice", "score", "noul", "head"],
- "heads": 2, "auth": "open", "version": "0.1.0"}
+ "heads": 2, "auth": "open", "version": "0.1.19"}
 ```
 
 This is how you find out remotely which encoder your heads will be trained under. It
@@ -687,8 +687,8 @@ jevimage.available()
 repr(jevimage.load("mine").encoder)   # -> '<Mine mine dim=8>'
 ```
 
-Registration lives in *your* process. The `jev` CLI never imports your code, so a
-registered encoder is invisible to it; see [encoders.md](/docs/encoders).
+Registration lives in *your* process. The `jevimage` CLI never imports your code, so a
+registered encoder is invisible to it; see [encoders.md](encoders.md).
 
 ### `available`
 
@@ -711,7 +711,7 @@ jevimage.available()
 jevimage.DEFAULT     # -> 'siglip2-base-224'
 ```
 
-The encoder `load()` uses when given neither an argument nor `$JEV_ENCODER`.
+The encoder `load()` uses when given neither an argument nor `$JEVIMAGE_ENCODER`.
 
 ---
 
@@ -847,7 +847,7 @@ expectations.
 ### `__version__`
 
 ```python
-jevimage.__version__   # -> '0.1.0'
+jevimage.__version__   # -> '0.1.19'
 ```
 
 Also reported by `Remote.health()["version"]`, which is how you check that a server and
@@ -894,8 +894,8 @@ The `None` case is the connection failure, and it names the port and what to run
 
 ```python
 jevimage.connect("http://127.0.0.1:9").list_heads()
-# JevError: cannot reach jev at http://127.0.0.1:9 ([Errno 111] Connection refused).
-#           Start one with `jev serve`, or pass the URL it is actually listening on.
+# JevError: cannot reach a jevimage server at http://127.0.0.1:9 ([Errno 111] Connection refused).
+#           Start one with `jevimage serve`, or pass the URL it is actually listening on.
 ```
 
 A timeout raises `JevError` too, suggesting `timeout=`. Two statuses are deliberately
@@ -962,7 +962,7 @@ Resolution differs between the two cases, because they are not the same kind of 
 | Question type | `temperature=` given | not given |
 | --- | --- | --- |
 | `choice`, `score`, `noul` pair | that value | the instance temperature, i.e. `load(temperature=…)`, else `1 / encoder.logit_scale`, else `0.01` |
-| `head` | that value | `1.0` — a trained head's logits are already on a sensible scale, so the instance temperature is **not** applied |
+| `head` | that value | `1.0` - a trained head's logits are already on a sensible scale, so the instance temperature is **not** applied |
 | `noul` single caption | ignored | ignored |
 
 ```python
@@ -990,4 +990,4 @@ that makes the number mean something. Change it only if you have measured the re
 
 ---
 
-[← CLI reference](/docs/reference-cli) · [Docs index](/docs/index) · [HTTP reference →](/docs/reference-http)
+[← CLI reference](reference-cli.md) · [Docs index](index.md) · [HTTP reference →](reference-http.md)

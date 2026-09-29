@@ -10,7 +10,8 @@ import base64
 import io
 from pathlib import Path
 
-__all__ = ["to_image", "read_folder", "as_examples", "Head", "IMAGE_SUFFIXES"]
+__all__ = ["to_image", "upright", "read_folder", "as_examples", "Head",
+           "IMAGE_SUFFIXES"]
 
 # What the encoders decode. Deliberately short: an animated GIF, an SVG or a RAW file
 # is not a thing to silently take the first frame of.
@@ -81,6 +82,27 @@ def to_image(src):
             "bytes, a PIL.Image, or a 'data:image/...;base64,...' string.")
     raise TypeError(f"cannot read an image from {type(src).__name__}; pass a path, "
                     "bytes, a PIL.Image, or a data URL")
+
+
+def upright(im):
+    """`im` the right way up and in RGB, copying only when that changes something.
+
+    Both of the obvious spellings copy the whole image to do nothing.
+    `ImageOps.exif_transpose` returns `image.copy()` when the Orientation tag already
+    says upright - which is every image that did not come off a phone - and
+    `Image.convert("RGB")` returns `self.copy()` when the mode is already RGB. On a 12MP
+    photo that is two full-size copies, about 30ms and 70MB, to produce the image we
+    started with. Every image on the way in goes through here, local and remote.
+    """
+    try:
+        if im.getexif().get(0x0112, 1) != 1:      # 0x0112 is Orientation
+            # imported here, not above: ImageOps pulls in ExifTags and the palette
+            # modules, about 4ms, and almost no image needs rotating
+            from PIL import ImageOps
+            im = ImageOps.exif_transpose(im)
+    except Exception:
+        pass                # no EXIF block, or an unreadable one: nothing to rotate
+    return im if im.mode == "RGB" else im.convert("RGB")
 
 
 def _cap(max_per_class):

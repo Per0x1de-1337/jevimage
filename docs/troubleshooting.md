@@ -19,7 +19,7 @@ explicitly and a real encoder was used. No number on this page is invented.
 Two facts explain a large share of reported errors:
 
 - `pip install jevimage` installs **no torch**. `jevimage.connect(url)` works fully;
-  `jevimage.load()` does not. See [Install](/docs/install).
+  `jevimage.load()` does not. See [Install](install.md).
 - A trained head belongs to **one encoder**. It records which one and refuses to run
   under another.
 
@@ -27,6 +27,7 @@ Two facts explain a large share of reported errors:
 
 ## Contents
 
+- [Start here: `jevimage doctor`](#start-here-jevimage-doctor)
 - [Install and import](#install-and-import)
 - [Loading an encoder](#loading-an-encoder)
 - [The first run takes minutes](#the-first-run-takes-minutes)
@@ -43,6 +44,22 @@ Two facts explain a large share of reported errors:
 - [HTTP status codes at a glance](#http-status-codes-at-a-glance)
 
 ---
+
+## Start here: `jevimage doctor`
+
+Before reading further, run it. Most of this page is one install missing one piece, and
+`doctor` names the piece and the command that installs it:
+
+```console
+$ jevimage doctor
+```
+
+It reports the Python version, whether pillow is there, whether a server answers,
+whether torch and transformers are installed, which GPU it found and how much of it is
+free, whether the weights are already downloaded, and how much disk is left. Lines
+marked `NO` must be fixed, `--` is something this install does not have and does not
+need. It exits 1 only when nothing on the machine could answer a question - no local
+model stack and no server to call.
 
 ## Install and import
 
@@ -69,7 +86,7 @@ pip install 'jevimage[local]'          # run the encoder here
 
 ```python
 import jevimage
-jev = jevimage.connect("http://your-host:8000")   # someone else runs it
+jev = jevimage.connect("http://your-host:8731")   # someone else runs it
 ```
 
 `Remote` has the same method names, takes the same arguments and returns the same
@@ -92,20 +109,20 @@ jevimage.connect("http://127.0.0.1:8123").health()
  'siglip2-base-384', 'siglip2-giant-384', 'siglip2-so400m-384']
 {'encoder': 'toy', 'dim': 16, 'device': 'cpu',
  'primitives': ['choice', 'score', 'noul', 'head'], 'heads': 0,
- 'auth': 'open', 'version': '0.1.0'}
+ 'auth': 'open', 'version': '0.1.19'}
 ```
 
 `available()` works without torch on purpose: seeing which encoders exist should not
 require the stack that runs them.
 
-### `jev: this command runs the encoder locally, which needs torch`
+### `jevimage: this command runs the encoder locally, which needs torch`
 
 ```console
-$ jev ask photo.png --choice red="a red square" blue="a blue square"
-jev: this command runs the encoder locally, which needs torch:
+$ jevimage ask photo.png --choice red="a red square" blue="a blue square"
+jevimage: this command runs the encoder locally, which needs torch:
        pip install 'jevimage[local]'
      or point it at a server that already has one:
-       jev ask --url http://host:8000   (also $JEV_URL)
+       jevimage ask --url http://host:8731   (also $JEVIMAGE_URL)
 exit 1
 ```
 
@@ -114,37 +131,37 @@ and prints both fixes, rather than letting `No module named 'torch'` escape; tha
 message does not tell you which of the two fixes you want. Exit status is 1, with no
 traceback.
 
-**Fix.** Either install the extra, or add `--url` / `$JEV_URL`:
+**Fix.** Either install the extra, or add `--url` / `$JEVIMAGE_URL`:
 
 ```bash
-jev ask photo.png --url http://127.0.0.1:8123 --choice red="a red square" blue="a blue square"
-export JEV_URL=http://127.0.0.1:8123 JEV_API_KEY=s3cret   # same thing, once
+jevimage ask photo.png --url http://127.0.0.1:8123 --choice red="a red square" blue="a blue square"
+export JEVIMAGE_URL=http://127.0.0.1:8123 JEVIMAGE_API_KEY=s3cret   # same thing, once
 ```
 
-Which commands can go remote: `ask`, `train`, `heads`, `rm`. `jev encoders` needs
-nothing and always works. `jev serve` is local.
+Which commands can go remote: `ask`, `train`, `heads`, `rm`. `jevimage encoders` needs
+nothing and always works. `jevimage serve` is local.
 
-**`jev heads` with no `--url` also needs torch.** Not because of the files: the local
+**`jevimage heads` with no `--url` also needs torch.** Not because of the files: the local
 branch of `cmd_heads` imports `jevimage.training` for its one formatting helper, and
 that module imports torch at module scope. So it fails with the message above even when
-the head directory is empty or absent. `jev heads --url ...` never takes that branch, and
+the head directory is empty or absent. `jevimage heads --url ...` never takes that branch, and
 is the path that exists for API-only installs:
 
 ```console
-$ jev heads --url http://127.0.0.1:8123
-no heads in http://127.0.0.1:8123. Train one: jev train NAME FOLDER
+$ jevimage heads --url http://127.0.0.1:8123
+no heads in http://127.0.0.1:8123. Train one: jevimage train NAME FOLDER
 ```
 
-### `jev serve needs uvicorn`
+### `jevimage serve needs uvicorn`
 
 ```console
-$ jev serve
-jev: jev serve needs uvicorn: pip install 'jevimage[serve]'
+$ jevimage serve
+jevimage: jevimage serve needs uvicorn: pip install 'jevimage[serve]'
 exit 1
 ```
 
 **Fix.** `pip install 'jevimage[serve]'` (fastapi + uvicorn). See
-[Serving](/docs/serving).
+[Serving](serving.md).
 
 ### `No module named 'open_clip'`
 
@@ -166,16 +183,16 @@ jevimage.load("siglip-base")
 KeyError: "unknown encoder 'siglip-base'. Available: clip-vit-l-14, dfn5b-h-14-384,
 metaclip2-huge, siglip2-base-224, siglip2-base-384, siglip2-giant-384,
 siglip2-so400m-384. Register your own with jevimage.register(name, factory) - from
-Python, in the process that will serve it; the `jev` command only sees these built-in
+Python, in the process that will serve it; the `jevimage` command only sees these built-in
 names, because it never imports your code."
 ```
 
 **Why.** Registry names are exact. They are also stable identifiers: a trained head
 stores the name of the encoder that fitted it, so an entry is never renamed, only added.
 
-**Fix.** Copy a name from `jevimage.available()` or `jev encoders`. If it is your own
+**Fix.** Copy a name from `jevimage.available()` or `jevimage encoders`. If it is your own
 encoder, note the second half of that message: `register()` mutates a dict in *your*
-process. The `jev` command never imports your code, so a name you registered in a script
+process. The `jevimage` command never imports your code, so a name you registered in a script
 is invisible to the CLI. To serve a custom encoder, build the app yourself:
 
 ```python
@@ -183,7 +200,7 @@ import jevimage, uvicorn
 from jevimage.server import build_app
 
 jev = jevimage.load(MyEncoder())          # or jevimage.load("mine") after register()
-uvicorn.run(build_app(jev), host="127.0.0.1", port=8000)
+uvicorn.run(build_app(jev), host="127.0.0.1", port=8731)
 ```
 
 ### Registry and ensemble errors
@@ -191,7 +208,7 @@ uvicorn.run(build_app(jev), host="127.0.0.1", port=8000)
 | Message | Cause | Fix |
 | --- | --- | --- |
 | `'+' is reserved for ensembles, so a name cannot contain it` | `register("a+b", ...)` | Rename without `+` |
-| `factory must be callable and take no arguments` | `register("x", MyEncoder())` — an instance, not a factory | `register("x", lambda: MyEncoder())` |
+| `factory must be callable and take no arguments` | `register("x", MyEncoder())` - an instance, not a factory | `register("x", lambda: MyEncoder())` |
 | `malformed ensemble name 'a++b': join two or more encoder names with single '+'` | An empty member: a leading `+`, a trailing `+`, a doubled `++`, or `+` alone | Name every member, one `+` between each: `load("a+b")` |
 | `unknown encoder 'toyy'` from an ensemble | One member name is a typo; members are resolved individually | Fix that member |
 
@@ -230,7 +247,7 @@ than accepted.
 `jevimage.encoders.Ensemble([one])` built by hand; `load()` never reaches it.)
 
 An ensemble's members each load fully, so a typo in the *second* member is only reported
-after the first one has downloaded. Check names with `jev encoders` first.
+after the first one has downloaded. Check names with `jevimage encoders` first.
 
 ### Custom encoders: `'Half' object has no attribute 'img'`
 
@@ -336,7 +353,7 @@ it is a real startup cost.
   survives container restarts, or you re-download on every deploy.
 - `HF_HUB_OFFLINE=1` makes a missing cache fail immediately instead of hanging on a slow
   network. Useful for proving the cache is warm.
-- Set `JEV_ENCODER` so every process agrees which weights to warm.
+- Set `JEVIMAGE_ENCODER` so every process agrees which weights to warm.
 - Instances are cached per name inside the process, so calling `load("siglip2-base-224")`
   twice loads the weights once.
 - A server pays this once at startup. That is the strongest argument for
@@ -352,11 +369,11 @@ it is a real startup cost.
 A malformed question is not free: `ask()` encodes the image first and plans the questions
 afterwards, so a bad question in a batch of 64 fails the whole call *after* paying for the
 encode. (The CLI's own flag parsing is the exception, which happens before any weights
-load.) Types and shapes are in [Question types](/docs/questions); this is the failure list.
+load.) Types and shapes are in [Question types](questions.md); this is the failure list.
 
 | Message | Cause | Fix |
 | --- | --- | --- |
-| `a question must be an object, got str` | `{"q": "is it red"}` — a bare string where a question object belongs | `{"q": {"type": "choice", "criteria": {...}}}` |
+| `a question must be an object, got str` | `{"q": "is it red"}` - a bare string where a question object belongs | `{"q": {"type": "choice", "criteria": {...}}}` |
 | `unknown question type 'yesno'; expected one of: choice, score, noul, head` | A type that does not exist | Use one of the four |
 | `choice needs a criteria object of 2..255 options, e.g. {"indoor": "an indoor scene", "outdoor": "the outdoors"}` | Fewer than 2 options, more than 255, or `criteria` is not a dict/list | Give at least two options |
 | `choice criteria repeats 'a cat'; each option needs its own caption` | A bare list `["a cat", "a cat"]`; the list is keyed by caption, so duplicates would collapse | Make each caption distinct, or use the `{label: caption}` form |
@@ -412,7 +429,7 @@ that looks like a probability and is not. So it raises instead.
 | --- | --- | --- | --- |
 | SigLIP / SigLIP2 (`siglip2-*`) | yes | yes | works |
 | CLIP-family (`clip-vit-l-14`, `metaclip2-huge`) | yes | **no** | raises |
-| `dfn5b-h-14-384` (open_clip) | yes | **no** — set to `None` explicitly | raises |
+| `dfn5b-h-14-384` (open_clip) | yes | **no** - set to `None` explicitly | raises |
 | Any `Ensemble` (`a+b`) | the mean of its members', when every member has one | **no** | raises |
 | A custom encoder that declares neither | no | no | raises |
 
@@ -551,8 +568,8 @@ ValueError: unknown head 'nope'; trained heads: colours
 ```
 
 The message lists what is there (`none trained yet` when the directory is empty). Check
-with `jev heads`, and check you are pointed at the right directory: `heads_dir=`, else
-`$JEV_HEADS_DIR`, else `$JEV_HOME/heads`, else `~/.jev/heads`.
+with `jevimage heads`, and check you are pointed at the right directory: `heads_dir=`, else
+`$JEVIMAGE_HEADS_DIR`, else `$JEVIMAGE_HOME/heads`, else `~/.jev/heads`.
 
 A head file that exists but *fails to load* gets its own message, not this one. See
 [a head file that will not load](#a-head-file-that-will-not-load).
@@ -591,7 +608,7 @@ head = jev.train("colours", "ds/")          # or refit under the new one
 
 (`Toy` is a class you hold, so it is loaded as an instance. A registry name - `jevimage.load("siglip2-base-224")` - is the other spelling; `jevimage.load("toy")` is neither, and raises `unknown encoder 'toy'`.)
 
-This is also why changing `$JEV_ENCODER` on a server invalidates every head it holds.
+This is also why changing `$JEVIMAGE_ENCODER` on a server invalidates every head it holds.
 Retrain them, or run a second server.
 
 ### `head 'colours' expects 16-dim embeddings, this encoder produces 32`
@@ -650,10 +667,10 @@ default value of the `weights_only` argument in `torch.load` from `False` to `Tr
 Re-running `torch.'}
 ```
 
-`jev heads` surfaces it on **stderr**, so it does not vanish from the listing:
+`jevimage heads` surfaces it on **stderr**, so it does not vanish from the listing:
 
 ```console
-$ jev heads
+$ jevimage heads
 junk.pt is present but unreadable: UnpicklingError: Weights only load failed. ...
 head     encoder  classes   n  held out     created
 colours      toy        2  12     50.0%  2026-09-23
@@ -682,7 +699,7 @@ ValueError: unknown head 'nope'; trained heads: colours
 ```
 
 **Fix.** Read the message: it names the file, the directory and the loader's own reason.
-`jev heads` (stderr), `jev heads --json` (the `broken` key) and `jev.heads.broken` list
+`jevimage heads` (stderr), `jevimage heads --json` (the `broken` key) and `jev.heads.broken` list
 every such file at once. The usual causes:
 
 - The file was written by a newer torch, or is not a torch file at all.
@@ -716,7 +733,7 @@ Retrain to restore it.
 | Message | Cause | Fix |
 | --- | --- | --- |
 | `need at least 2 distinct labels` | One class | A classifier needs something to discriminate against |
-| `every class needs at least 2 examples; too few for: red` | A class with one image | Add examples. Two is the floor, not a target — `accuracy` from a 2-example class is a coin toss |
+| `every class needs at least 2 examples; too few for: red` | A class with one image | Add examples. Two is the floor, not a target - `accuracy` from a 2-example class is a coin toss |
 | `labels ['red', 'red '] differ only by surrounding whitespace, so they would print identically; make them distinct` | A stray space in a folder name or label | Rename. They would print identically in every table, so one class would appear to score half of what it should for no visible reason |
 | `at most 100 classes` | More than `MAX_CLASSES` | Group them, or fit several heads |
 | `at most 4000 examples; got 4001` | More than `MAX_EXAMPLES` | `max_per_class=`, or several heads |
@@ -743,76 +760,49 @@ the overall number hides that.
 report at `k < 2`, because a number computed on a fold that was missing a class is worse
 than no number. The two-per-class floor above means `train()` never lands there, so a
 `None` you see came from a head record that carries no `cv_accuracy` at all, one built or
-edited by hand. `jev heads` prints `-` for it, not `0.0%`.
+edited by hand. `jevimage heads` prints `-` for it, not `0.0%`.
 
 ---
 
 ## Out of memory while training
 
-There is no `OutOfMemoryError` with a helpful message here; you get CUDA's or the OOM
-killer's.
-
-`Jev.train()` embeds **every image in one call** to the encoder. Measured with an encoder
-that counts its own batch sizes:
-
-```python
-seen = []
-class Watch(Toy):
-    name = "watch"
-    def img(self, ims):
-        seen.append(len(ims)); return super().img(ims)
-
-j = jevimage.load(Watch(), heads_dir="heads")
-j.train("w", "ds")                        # 12 images
-j.train("w2", "ds", max_per_class=2)
-```
+Images go through the encoder in chunks of 32, and **the chunk halves on an
+out-of-memory** until it fits, then carries on. So a folder that used to die now trains,
+and says what it did:
 
 ```text
-img() batch sizes, train on 12 images: [12]
-img() batch sizes, max_per_class=2: [4]
+WARNING out of memory embedding 32 images at a time; retrying at 16 ($JEVIMAGE_BATCH sets this)
 ```
 
-One call, every image. For a 224px encoder the preprocessed pixel tensor alone is
-`n × 3 × 224 × 224 × 4` bytes, about 600 KB per image, so 4000 images is ~2.4 GB of
-pixels before the model has done anything. At 384px it is roughly three times that.
+Before 0.1.19 this was one forward pass over the whole folder. A folder is allowed 4000
+images, and for a 224px encoder the preprocessed pixel tensor alone is
+`n x 3 x 224 x 224 x 4` bytes - about 600 KB an image, so 4000 images is ~2.4 GB of
+pixels before the model has done anything, and at 384px roughly three times that.
+Training 1071 images on a 4 GB card failed every time, as `CUDA out of memory` locally
+and a bare HTTP 500 through `jevimage serve`.
 
-**Fixes, cheapest first.**
+The chunk is not tuned to the card, because the right number depends on the card, the
+encoder, the image size and whatever else holds memory at that moment. Starting at 32
+and backing off costs one failed pass on a small GPU and nothing at all on a large one.
+
+**If you still run out**, in order of how much they buy you:
+
+```bash
+JEVIMAGE_BATCH=8 jevimage train street ds/        # start lower, skip the failed passes
+JEVIMAGE_DEVICE=cpu jevimage train street ds/     # system RAM is usually far larger
+```
 
 ```python
-jev.train("street", "ds/", max_per_class=200)          # cap the images
+jev.train("street", "ds/", max_per_class=200)   # fewer images, not smaller batches
 ```
 
-```python
-# embed in chunks yourself, then fit on the embeddings
-import torch, jevimage
-from jevimage import as_examples
-from jevimage import training                            # module, not in __all__
+A smaller encoder is the other lever: 224px over 384px roughly thirds the pixel memory.
+Training against a server (`connect(url).train(...)`) moves the problem to a machine
+sized for it, though the images then cross the wire, bounded by the server's own
+per-image and per-request limits.
 
-images, labels = as_examples("ds/")
-embs = torch.cat([jev.embed(images[i:i + 32]) for i in range(0, len(images), 32)])
-head = training.train(embs, labels)
-head["encoder"] = jev.encoder.name
-jev.heads.save("street", head)
-print(jev.head("street"))
-print(jev.ask("ds/red/0.png", {"q": {"type": "head", "head": "street"}}))
-```
-
-```text
-<Head 'street' 2 classes, 12 examples, 50.0% held out>
-{'q': <head 'red' p=0.986>}
-```
-
-That second form bypasses `Jev.train`, so remember `head["encoder"]`: without it the
-head fails the provenance check with `records no encoder`.
-
-Other levers: `JEV_DEVICE=cpu` trades speed for system RAM, which is usually far larger
-than GPU RAM; a 224px encoder over a 384px one roughly thirds the pixel memory; and
-training on a server (`connect(url).train(...)`) moves the problem to a machine sized for
-it, though the images then cross the wire, bounded by the server's own per-image and
-per-request limits.
-
-OOM at *query* time is a different thing: `ask()` embeds one image. If that OOMs, the
-encoder is too large for the device, not the batch.
+OOM at *query* time is a different thing: `ask()` embeds one image. If that runs out,
+the encoder is too large for the device, and no batch size will help.
 
 ---
 
@@ -966,11 +956,11 @@ Prefix the scheme.
 ### Connection refused, or unknown host
 
 ```text
-JevError: cannot reach jev at http://127.0.0.1:9 ([Errno 111] Connection refused).
-Start one with `jev serve`, or pass the URL it is actually listening on.
+JevError: cannot reach a jevimage server at http://127.0.0.1:9 ([Errno 111] Connection refused).
+Start one with `jevimage serve`, or pass the URL it is actually listening on.
 
-JevError: cannot reach jev at http://no-such-host.invalid:8000 ([Errno -2] Name or
-service not known). Start one with `jev serve`, or pass the URL it is actually
+JevError: cannot reach a jevimage server at http://no-such-host.invalid:8731 ([Errno -2] Name or
+service not known). Start one with `jevimage serve`, or pass the URL it is actually
 listening on.
 ```
 
@@ -998,19 +988,19 @@ jev = jevimage.connect(url, timeout=300)
 ```
 
 Long timeouts are also right for a large `train()` upload, which sends every image in one
-request. From the CLI that is `--timeout SECONDS` on `jev ask` and `jev train`, or
-`$JEV_TIMEOUT`, which covers all four remote commands, with the same 60 s default:
+request. From the CLI that is `--timeout SECONDS` on `jevimage ask` and `jevimage train`, or
+`$JEVIMAGE_TIMEOUT`, which covers all four remote commands, with the same 60 s default:
 
 ```bash
-jev train street dataset/ --url http://127.0.0.1:8123 --timeout 600
-export JEV_TIMEOUT=600          # same thing, once
+jevimage train street dataset/ --url http://127.0.0.1:8123 --timeout 600
+export JEVIMAGE_TIMEOUT=600          # same thing, once
 ```
 
 ### `401`: `send 'Authorization: Bearer <key>'`
 
 ```text
 JevError: send 'Authorization: Bearer <key>' with a key this server was started with
-(JEV_API_KEYS) [HTTP 401 from GET http://127.0.0.1:8124/v1/heads]
+(JEVIMAGE_API_KEYS) [HTTP 401 from GET http://127.0.0.1:8124/v1/heads]
 ```
 
 Missing key, wrong key, or a malformed header (`Authorization: secret` without `Bearer `
@@ -1021,12 +1011,12 @@ jevimage.connect(url, api_key="s3cret")
 ```
 
 ```bash
-export JEV_API_KEY=s3cret      # what the CLI reads, alongside $JEV_URL
+export JEVIMAGE_API_KEY=s3cret      # what the CLI reads, alongside $JEVIMAGE_URL
 ```
 
 A server started without keys is **open**. `health()["auth"]` says `open` or `bearer`,
 and that endpoint needs no key, so you can always check which mode you are in. On the
-server side, keys come from `JEV_API_KEYS` (comma- or space-separated) or `jev serve
+server side, keys come from `JEVIMAGE_API_KEYS` (comma- or space-separated) or `jevimage serve
 --api-key K1 K2`. A non-ASCII key is a plain 401, not a 500.
 
 ### `413`: too large, four different ways
@@ -1160,8 +1150,8 @@ kind; an empty list is the answer.) The CLI turns that into an error with a non-
 exit:
 
 ```console
-$ jev rm nope --url http://127.0.0.1:8123
-jev: no head named 'nope' on http://127.0.0.1:8123
+$ jevimage rm nope --url http://127.0.0.1:8123
+jevimage: no head named 'nope' on http://127.0.0.1:8123
 exit 1
 ```
 
@@ -1210,7 +1200,7 @@ json.dumps(a)
 Fields by type: `choice` and `head` carry `choice` / `probabilities` / `confidence`
 (`head` adds `head`, `trained_on`, `accuracy`); `score` carries `score` /
 `probabilities` / `legend` / `confidence`; `noul` carries `noul` / `basis`. Full shapes
-are in [Question types](/docs/questions).
+are in [Question types](questions.md).
 
 ---
 
@@ -1224,30 +1214,30 @@ are in [Question types](/docs/questions).
 | `413` | Too many images, too many bytes, or too many pixels | [413](#413-too-large-four-different-ways) |
 | `415` | Not JPEG, PNG or WebP | [415](#415-unsupported-format) |
 | `422` | Malformed question, bad body, or a core `ValueError` verbatim | [422](#422-malformed-request) |
-| none | Nothing answered — wrong URL, dead server, DNS, timeout | [Connection refused, or unknown host](#connection-refused-or-unknown-host) |
+| none | Nothing answered - wrong URL, dead server, DNS, timeout | [Connection refused, or unknown host](#connection-refused-or-unknown-host) |
 
 ---
 
 ## Still stuck
 
-- `jev encoders`: works with no torch and no network; confirms the package imports.
+- `jevimage encoders`: works with no torch and no network; confirms the package imports.
 - `curl http://host:port/v1/health`: open even on a keyed server; tells you the
   encoder, its `dim`, the device, the head count and the auth mode.
-- `jev heads`: read **stderr** too, which is where unreadable head files are reported.
+- `jevimage heads`: read **stderr** too, which is where unreadable head files are reported.
 - `jev.heads.broken`: the same, from Python.
-- `jev ask ... --json`: the raw answer shape, when the formatted output is hiding
+- `jevimage ask ... --json`: the raw answer shape, when the formatted output is hiding
   something.
 - Every module ships a runnable self-check: `python3 -m jevimage.client`,
   `python3 -m jevimage.server`, `python3 -m jevimage.training`. If one of those fails,
   the problem is the install, not your code. All three stand up a real encoder and a
   real server, so they need `pip install 'jevimage[serve]'`; on an API-only install they
   exit with `No module named 'torch'`, which is the install working as intended. The
-  self-check that fits that install is `jev encoders`.
+  self-check that fits that install is `jevimage encoders`.
 
-Related: [Install](/docs/install) · [Choosing an encoder](/docs/encoders) ·
-[Question types](/docs/questions) · [Serving](/docs/serving) ·
-[HTTP reference](/docs/reference-http) · [Python reference](/docs/reference-python)
+Related: [Install](install.md) · [Choosing an encoder](encoders.md) ·
+[Question types](questions.md) · [Serving](serving.md) ·
+[HTTP reference](reference-http.md) · [Python reference](reference-python.md)
 
 ---
 
-[← Cookbook](/docs/cookbook) · [Docs index](/docs/index)
+[← Cookbook](cookbook.md) · [Docs index](index.md)

@@ -54,15 +54,15 @@ dev = ["jevimage[serve]", "pytest>=7"]
 # without any toolchain at all.
 
 [project.scripts]
-jev = "jevimage.cli:main"
+jevimage = "jevimage.cli:main"
 
 # PyPI renders these as the sidebar links on the package page. A URL that 404s is
 # worse than none, so each of these is one that answers.
 
 [project.urls]
-Documentation = "http://13.50.56.146/docs"
-Source = "https://github.com/jevimage/jevimage"
-Issues = "https://github.com/jevimage/jevimage/issues"
+Documentation = "https://docs.jevimage.org"
+Source = "https://github.com/Per0x1de-1337/jevimage"
+Issues = "https://github.com/Per0x1de-1337/jevimage/issues"
 
 [tool.setuptools]
 packages = ["jevimage"]
