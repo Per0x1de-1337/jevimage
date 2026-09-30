@@ -57,7 +57,7 @@ head lives on the server:
 ```console
 $ pip install jevimage
 $ python -c "import jevimage; print(jevimage.__version__)"
-0.1.19
+0.1.20
 ```
 
 Training from a machine with no torch on it at all:
@@ -151,7 +151,7 @@ missing - start there:
 
 ```console
 $ jevimage doctor
-jevimage 0.1.19 on python 3.12.3 (Linux x86_64)
+jevimage 0.1.20 on python 3.12.3 (Linux x86_64)
 
   yes python >= 3.10         3.12.3
   yes pillow                 present
@@ -176,7 +176,7 @@ Or run the check for the level you installed. Each of these was run as printed.
 
 ```console
 $ python -c "import jevimage; print(jevimage.__version__)"
-0.1.19
+0.1.20
 $ python -c "import jevimage; print(jevimage.available())"
 ['clip-vit-l-14', 'dfn5b-h-14-384', 'metaclip2-huge', 'siglip2-base-224', 'siglip2-base-384', 'siglip2-giant-384', 'siglip2-so400m-384']
 ```
@@ -186,7 +186,7 @@ encoder your answers and heads will come from:
 
 ```console
 $ python -c "import jevimage; print(jevimage.connect('http://127.0.0.1:8199').health())"
-{'encoder': 'siglip2-base-224', 'dim': 768, 'device': 'cpu', 'primitives': ['choice', 'score', 'noul', 'head'], 'heads': 0, 'auth': 'open', 'version': '0.2.0'}
+{'encoder': 'siglip2-base-224', 'dim': 768, 'device': 'cpu', 'primitives': ['choice', 'score', 'noul', 'head'], 'heads': 0, 'auth': 'open', 'version': '0.1.20'}
 ```
 
 **`[local]`.** The real check is loading an encoder, because that is what exercises
@@ -207,7 +207,7 @@ downloads that 1.5 GB.
 ```console
 $ JEVIMAGE_DEVICE=cpu jevimage serve --port 8199 &
 $ curl -s http://127.0.0.1:8199/v1/health
-{"encoder":"siglip2-base-224","dim":768,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"open","version":"0.1.19"}
+{"encoder":"siglip2-base-224","dim":768,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"open","version":"0.1.20"}
 ```
 
 `auth: open` means no API key is set and anyone who can reach the port can use it. See
@@ -259,9 +259,9 @@ machine with no index reachable, supply it yourself:
 $ pip install --no-index --no-build-isolation --no-deps /path/to/jevimage-oss
 Successfully built jevimage
 Installing collected packages: jevimage
-Successfully installed jevimage-0.1.19
+Successfully installed jevimage-0.1.20
 $ python -c "import jevimage; print(jevimage.__file__, jevimage.__version__)"
-.../site-packages/jevimage/__init__.py 0.1.19
+.../site-packages/jevimage/__init__.py 0.1.20
 ```
 
 The built wheel is 51 KB. `--no-deps` there means you still have to have pillow (and,

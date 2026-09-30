@@ -475,7 +475,7 @@ jev.health()
 ```json
 {"encoder": "toy", "dim": 16, "device": "cpu",
  "primitives": ["choice", "score", "noul", "head"],
- "heads": 2, "auth": "open", "version": "0.1.19"}
+ "heads": 2, "auth": "open", "version": "0.1.20"}
 ```
 
 This is how you find out remotely which encoder your heads will be trained under. It
@@ -847,7 +847,7 @@ expectations.
 ### `__version__`
 
 ```python
-jevimage.__version__   # -> '0.1.19'
+jevimage.__version__   # -> '0.1.20'
 ```
 
 Also reported by `Remote.health()["version"]`, which is how you check that a server and

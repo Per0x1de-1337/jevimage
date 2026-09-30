@@ -111,7 +111,7 @@ jevimage: error: argument command: invalid choice: 'frobnicate' (choose from 'se
 exit=2
 
 $ jevimage
-jevimage 0.1.19 - typed questions about images.
+jevimage 0.1.20 - typed questions about images.
 
   jevimage ask photo.jpg --choice indoor="an indoor scene" outdoor="the outdoors"
   jevimage train mine dataset/      one sub-folder per label
@@ -518,7 +518,7 @@ there.
 
 ```console
 $ jevimage doctor
-jevimage 0.1.19 on python 3.12.3 (Linux x86_64)
+jevimage 0.1.20 on python 3.12.3 (Linux x86_64)
 
   yes python >= 3.10         3.12.3
   yes pillow                 present
@@ -537,7 +537,7 @@ An API-only install is a pass, not a failure:
 
 ```console
 $ jevimage doctor
-jevimage 0.1.19 on python 3.12.3 (Linux x86_64)
+jevimage 0.1.20 on python 3.12.3 (Linux x86_64)
 
   yes python >= 3.10         3.12.3
   yes pillow                 present

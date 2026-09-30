@@ -530,7 +530,7 @@ app = build_app(jevimage.load(MeanColour(), heads_dir="/var/lib/jev/heads", batc
 ```console
 $ python -m uvicorn serve_colour:app --port 8140
 $ curl -s http://127.0.0.1:8140/v1/health
-{"encoder":"mean-colour","dim":3,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"open","version":"0.1.19"}
+{"encoder":"mean-colour","dim":3,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"open","version":"0.1.20"}
 ```
 
 Give it an explicit `heads_dir`. Without one the server publishes `~/.jev/heads` - whatever is in it, including heads trained under a different encoder, which it will then

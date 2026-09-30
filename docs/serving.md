@@ -110,7 +110,7 @@ if __name__ == "__main__":
 ```console
 $ python serve_toy.py &
 $ curl -s http://127.0.0.1:8124/v1/health
-{"encoder":"toy","dim":16,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"bearer","version":"0.1.19"}
+{"encoder":"toy","dim":16,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"bearer","version":"0.1.20"}
 ```
 
 `build_app(jev=None, *, api_keys=None)`:
@@ -154,7 +154,7 @@ $ uvicorn mount_toy:api --host 127.0.0.1 --port 8735 &
 $ curl -s http://127.0.0.1:8735/ ; echo
 {"service":"my app"}
 $ curl -s http://127.0.0.1:8735/jev/v1/health ; echo
-{"encoder":"toy","dim":16,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"open","version":"0.1.19"}
+{"encoder":"toy","dim":16,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"open","version":"0.1.20"}
 ```
 
 (`mount_toy.py` has no `uvicorn.run` of its own - it is a module for a server to import,
@@ -258,7 +258,7 @@ Not "read-only open". Open:
 
 ```console
 $ curl -s http://127.0.0.1:8731/v1/health ; echo
-{"encoder":"toy",...,"auth":"open","version":"0.1.19"}
+{"encoder":"toy",...,"auth":"open","version":"0.1.20"}
 $ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8731/v1/heads \
     -H 'Content-Type: application/json' --data-binary @train.json
 200
@@ -436,7 +436,7 @@ warms up once.
 
 ```console
 $ curl -s http://127.0.0.1:8124/v1/health ; echo
-{"encoder":"toy","dim":16,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"bearer","version":"0.1.19"}
+{"encoder":"toy","dim":16,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"bearer","version":"0.1.20"}
 ```
 
 - Never authenticated, on purpose.

@@ -109,7 +109,7 @@ jevimage.connect("http://127.0.0.1:8123").health()
  'siglip2-base-384', 'siglip2-giant-384', 'siglip2-so400m-384']
 {'encoder': 'toy', 'dim': 16, 'device': 'cpu',
  'primitives': ['choice', 'score', 'noul', 'head'], 'heads': 0,
- 'auth': 'open', 'version': '0.1.19'}
+ 'auth': 'open', 'version': '0.1.20'}
 ```
 
 `available()` works without torch on purpose: seeing which encoders exist should not
@@ -774,7 +774,7 @@ and says what it did:
 WARNING out of memory embedding 32 images at a time; retrying at 16 ($JEVIMAGE_BATCH sets this)
 ```
 
-Before 0.1.19 this was one forward pass over the whole folder. A folder is allowed 4000
+Before 0.1.20 this was one forward pass over the whole folder. A folder is allowed 4000
 images, and for a 224px encoder the preprocessed pixel tensor alone is
 `n x 3 x 224 x 224 x 4` bytes - about 600 KB an image, so 4000 images is ~2.4 GB of
 pixels before the model has done anything, and at 384px roughly three times that.

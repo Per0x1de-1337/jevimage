@@ -206,7 +206,7 @@ work here, and whether a single-caption `noul` is possible (it needs an encoder 
 curl -s http://127.0.0.1:8123/v1/health
 ```
 ```json
-{"encoder":"toy","dim":16,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"open","version":"0.1.19"}
+{"encoder":"toy","dim":16,"device":"cpu","primitives":["choice", "score", "noul", "head"],"heads":0,"auth":"open","version":"0.1.20"}
 ```
 
 **Status:** 200 only.
@@ -658,7 +658,7 @@ sit outside the `/v1` router.
 curl -s http://127.0.0.1:8126/openapi.json | jq -c '{info, paths: (.paths|keys)}'
 ```
 ```json
-{"info":{"title":"jevimage","version":"0.1.19"},"paths":["/v1/ask","/v1/embed","/v1/heads","/v1/heads/{name}","/v1/heads/{name}/compare","/v1/health"]}
+{"info":{"title":"jevimage","version":"0.1.20"},"paths":["/v1/ask","/v1/embed","/v1/heads","/v1/heads/{name}","/v1/heads/{name}/compare","/v1/health"]}
 ```
 
 The schema is generated from the request models, so it is exact about request bodies and

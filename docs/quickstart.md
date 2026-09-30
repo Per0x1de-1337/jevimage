@@ -145,7 +145,7 @@ print(jev.health())
 
 ```
 <choice 'red' p=1.000>
-{'encoder': 'toy', 'dim': 16, 'device': 'cpu', 'primitives': ['choice', 'score', 'noul', 'head'], 'heads': 0, 'auth': 'open', 'version': '0.2.0'}
+{'encoder': 'toy', 'dim': 16, 'device': 'cpu', 'primitives': ['choice', 'score', 'noul', 'head'], 'heads': 0, 'auth': 'open', 'version': '0.1.20'}
 ```
 
 Identical to the local answer above here, digit for digit. The same engine, on the other

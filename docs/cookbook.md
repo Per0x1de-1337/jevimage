@@ -584,7 +584,7 @@ $ JEVIMAGE_URL=http://127.0.0.1:8123 python3 r7.py
 ```
 
 ```text
-remote health: {'encoder': 'toy', 'dim': 16, 'device': 'cpu', 'primitives': ['choice', 'score', 'noul', 'head'], 'heads': 0, 'auth': 'open', 'version': '0.1.19'}
+remote health: {'encoder': 'toy', 'dim': 16, 'device': 'cpu', 'primitives': ['choice', 'score', 'noul', 'head'], 'heads': 0, 'auth': 'open', 'version': '0.1.20'}
 local        : ('blue', 0.4711, 0.9485)
 remote       : ('blue', 0.4711, 0.9485)
 

@@ -147,6 +147,31 @@ The zero-shot column is what the prompts alone scored on the same images, becaus
 training does not always help, and the only useful answer is the one for your images,
 per class.
 
+## What it will not do
+
+**It answers what is *present*, not how things are arranged.** Measured: a man wearing a
+hat scores 0.993 for "the man is wearing a hat", a bare-headed man with no hat in frame
+scores 0.092, and both are right. A man *holding* a hat above his head also scores 1.000,
+because the hat is in the picture and the pooled vector is not aligned to where it is.
+Ask whether something is there and it is reliable. Ask whether it is on, in, left of or
+held by something else and it will confidently answer the first question instead.
+
+That information is not lost, only unreachable from words. On 400 controlled images of two
+objects with the sides swapped, asking in words scores 50.00% (chance) while a linear head
+fitted on the same embeddings scores 80.83% on images it had not seen. So **arrangement is
+a `head` question, not a wording question** - and the head reports the accuracy it reached
+on held-out examples, so the number is yours rather than ours.
+
+**Do not phrase a `noul` pair as a negation.** `"wearing a pink dress"` against `"not
+wearing a pink dress"` is one caption with a word inserted, not two alternatives, and a
+dual encoder has no representation of "not": measured on a real photo those two are 0.927
+similar, where two genuine alternatives sit at 0.83-0.85. The answer carries a `warning`
+when it detects this, rather than handing back a confident-looking number. Name the
+alternative - pink against white - and the same model answers correctly.
+
+It also will not read a document, count reliably, or reason about what happened outside
+the frame.
+
 ## Documentation
 
 | Page | Read it when |

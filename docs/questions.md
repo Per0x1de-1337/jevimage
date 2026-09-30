@@ -484,6 +484,41 @@ held-out is a decision.
 
 ---
 
+## What a question cannot ask for
+
+Everything above answers **what is present**. None of it answers **how things are
+arranged**, and the difference is not obvious from the outside because the model is
+equally confident either way.
+
+Measured on one photo set:
+
+| image | `"the man is wearing a hat"` vs `"the man is bare-headed"` | correct |
+|---|---|---|
+| a man wearing a hat | 0.993 | yes |
+| a bare-headed man, no hat in frame | 0.092 | yes |
+| a man **holding** a hat above his head | 1.000 | **no** |
+
+The third row is the whole problem. The hat is in the picture, the pooled vector records
+that, and it is not aligned to *where* the hat is. So a question phrased as presence gets
+a presence answer, however you word it.
+
+### The fix is `head`, not better wording
+
+The arrangement is not destroyed by pooling, only unreachable from text. On 400 controlled
+images of two objects with the sides swapped:
+
+| how you ask | accuracy |
+|---|---|
+| in words, zero-shot | 50.00% (chance) |
+| a linear head on the same embeddings | **80.83%** held out |
+
+Identical vectors, both times. So if you need *on his head* rather than *in the picture*,
+sort thirty examples into two folders and [train a head](training.md). The head reports
+the accuracy it reached on examples it had not seen, so you get a number measured on your
+data instead of trusting one measured on ours.
+
+The same applies to *on* vs *under*, *plugged in* vs *unplugged*, *worn* vs *carried*.
+
 ## Captions: what the model reads
 
 ### The template
