@@ -1,4 +1,6 @@
 # jevimage
+> ⚠️jevimage sdk is still in beta; if you encounter any error; ask claude to fix it; and would appreciate if you open a pull request ⚠️
+
 
 jevimage answers typed questions about an image with probabilities instead of prose. The
 image goes through a frozen dual encoder once and becomes a single unit-norm vector.
